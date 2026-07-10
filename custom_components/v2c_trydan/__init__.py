@@ -71,8 +71,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 await async_set_min_intensity(hass, coordinator.ip_address, min_intensity)
             else:
                 _LOGGER.error("min_intensity must be between 6 and 32")
-        except ValueError:
-            _LOGGER.error(f"Invalid min_intensity: {min_intensity}. Must be an integer.")
+        except (ValueError, KeyError, TypeError):
+            _LOGGER.error(f"Invalid or missing min_intensity: {min_intensity}. Must be an integer.")
 
     async def async_set_dynamic_power_mode(call: ServiceCall):
         dynamic_power_mode = call.data.get("DynamicPowerMode")
@@ -80,14 +80,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             dynamic_power_mode = int(dynamic_power_mode)
             if 0 <= dynamic_power_mode <= 7:
                 #_LOGGER.debug(f"Valid dynamic_power_mode: {dynamic_power_mode}")
-                await async_set_dynamic_power_mode(hass, coordinator.ip_address, dynamic_power_mode)
+                await async_write_dynamic_power_mode(hass, coordinator.ip_address, dynamic_power_mode)
             else:
                 _LOGGER.error("DynamicPowerMode must be between 0 and 7")
-        except ValueError:
-            _LOGGER.error(f"Invalid dynamic_power_mode: {dynamic_power_mode}. Must be an integer.")
+        except (ValueError, KeyError, TypeError):
+            _LOGGER.error(f"Invalid or missing DynamicPowerMode: {dynamic_power_mode}. Must be an integer.")
 
     async def set_max_intensity(call):
-        max_intensity = call.data["max_intensity"]
+        max_intensity = call.data.get("max_intensity")
         try:
             max_intensity = int(max_intensity)
             if 6 <= max_intensity <= 32:
@@ -95,11 +95,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 await async_set_max_intensity(hass, coordinator.ip_address, max_intensity)
             else:
                 _LOGGER.error("max_intensity must be between 6 y 32")
-        except ValueError:
-            _LOGGER.error(f"Invalid max_intensity: {max_intensity}. Must be an integer.")
+        except (ValueError, KeyError, TypeError):
+            _LOGGER.error(f"Invalid or missing max_intensity: {max_intensity}. Must be an integer.")
 
     async def set_intensity(call):
-        intensity = call.data["intensity"]
+        intensity = call.data.get("intensity")
         try:
             intensity = int(intensity)
             if 6 <= intensity <= 32:
@@ -107,8 +107,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 await async_set_intensity(hass, coordinator.ip_address, intensity)
             else:
                 _LOGGER.error("intensity must be between 6 y 32")
-        except ValueError:
-            _LOGGER.error(f"Invalid intensity: {intensity}. Must be an integer.")
+        except (ValueError, KeyError, TypeError):
+            _LOGGER.error(f"Invalid or missing intensity: {intensity}. Must be an integer.")
 
     async def set_min_intensity_slider(call):
         min_intensity = call.data.get("v2c_min_intensity")
@@ -125,8 +125,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                         _LOGGER.error("Entry data not found for setting min_intensity_slider")
                 else:
                     _LOGGER.error("v2c_min_intensity must be between 6 y 32")
-            except ValueError:
-                _LOGGER.error(f"Invalid v2c_min_intensity: {min_intensity}. Must be an integer.")
+            except (ValueError, KeyError, TypeError):
+                _LOGGER.error(f"Invalid or missing v2c_min_intensity: {min_intensity}. Must be an integer.")
         else:
             _LOGGER.error("v2c_min_intensity not provided")
 
@@ -139,14 +139,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 if 0 <= dynamic_power_mode <= 7:
                     if entry:
                         ip_address = coordinator.ip_address
-                        #_LOGGER.debug(f"Calling async_set_dynamic_power_mode with IP: {ip_address} and dynamic_power_mode: {dynamic_power_mode}")
-                        await async_set_dynamic_power_mode(hass, coordinator.ip_address, dynamic_power_mode)
+                        #_LOGGER.debug(f"Calling async_write_dynamic_power_mode with IP: {ip_address} and dynamic_power_mode: {dynamic_power_mode}")
+                        await async_write_dynamic_power_mode(hass, coordinator.ip_address, dynamic_power_mode)
                     else:
                         _LOGGER.error("Entry data not found for setting dynamic_power_mode_slider")
                 else:
                     _LOGGER.error("v2c_dynamic_power_mode must be between 0 y 7")
-            except ValueError:
-                _LOGGER.error(f"Invalid v2c_dynamic_power_mode: {dynamic_power_mode}. Must be an integer.")
+            except (ValueError, KeyError, TypeError):
+                _LOGGER.error(f"Invalid or missing v2c_dynamic_power_mode: {dynamic_power_mode}. Must be an integer.")
         else:
             _LOGGER.error("v2c_dynamic_power_mode not provided")
 
@@ -165,8 +165,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                         _LOGGER.error("Entry data not found for setting max_intensity_slider")
                 else:
                     _LOGGER.error("v2c_max_intensity must be between 6 y 32")
-            except ValueError:
-                _LOGGER.error(f"Invalid v2c_max_intensity: {max_intensity}. Must be an integer.")
+            except (ValueError, KeyError, TypeError):
+                _LOGGER.error(f"Invalid or missing v2c_max_intensity: {max_intensity}. Must be an integer.")
         else:
             _LOGGER.error("v2c_max_intensity not provided")
 
@@ -211,7 +211,7 @@ async def async_set_max_intensity(hass: HomeAssistant, ip_address: str, max_inte
     except aiohttp.ClientError as err:
         _LOGGER.error(f"Error setting max intensity: {err}")
 
-async def async_set_dynamic_power_mode(hass: HomeAssistant, ip_address: str, dynamic_power_mode: int):
+async def async_write_dynamic_power_mode(hass: HomeAssistant, ip_address: str, dynamic_power_mode: int):
     """Set dynamic power mode."""
     session = async_get_clientsession(hass)
     url = f"http://{ip_address}/write/DynamicPowerMode={dynamic_power_mode}"

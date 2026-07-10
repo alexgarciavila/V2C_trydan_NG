@@ -477,20 +477,23 @@ class ChargeKmSensor(CoordinatorEntity, SensorEntity):
             return
 
         km_to_charge = self.hass.states.get("number.v2c_km_to_charge")
-        if km_to_charge is not None:
-            try:
-                try:
-                    km_to_charge_float = float(km_to_charge.state)
-                except ValueError:
-                    km_to_charge_float = -1.0
+        if km_to_charge is None:
+            return
 
-                if self.state >= km_to_charge_float and km_to_charge_float != 0:
-                    await self.hass.services.async_call("switch", "turn_on", {"entity_id": "switch.v2c_trydan_switch_paused"})
-                    await self.hass.services.async_call("switch", "turn_on", {"entity_id": "switch.v2c_trydan_switch_locked"})
-                    await self.async_set_km_to_charge(0)
-                    self.hass.bus.async_fire("v2c_trydan.charging_complete")
-            except Exception as e:
-                _LOGGER.error(f"Error en carga de kilometros el valor esperado es: {km_to_charge.state} y el error {e}")
+        try:
+            km_to_charge_float = float(km_to_charge.state)
+        except (ValueError, TypeError):
+            _LOGGER.debug(f"km_to_charge no parseable ({km_to_charge.state}); se omite el ciclo de comprobacion de carga completa")
+            return
+
+        try:
+            if self.state >= km_to_charge_float and km_to_charge_float != 0:
+                await self.hass.services.async_call("switch", "turn_on", {"entity_id": "switch.v2c_trydan_switch_paused"})
+                await self.hass.services.async_call("switch", "turn_on", {"entity_id": "switch.v2c_trydan_switch_locked"})
+                await self.async_set_km_to_charge(0)
+                self.hass.bus.async_fire("v2c_trydan.charging_complete")
+        except Exception as e:
+            _LOGGER.error(f"Error en carga de kilometros el valor esperado es: {km_to_charge.state} y el error {e}")
 
     @property
     def unique_id(self):

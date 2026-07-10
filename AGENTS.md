@@ -8,7 +8,7 @@ Fuente de verdad operativa para agentes de IA en este repositorio.
 
 - Nombre: `V2C Trydan NG`
 - Tipo: `integración custom de Home Assistant (custom component, distribuida vía HACS)`
-- Estado: `activo; continuación (fork) del proyecto original archivado por su autor (Rain1971/V2C_trydant) tras un fallo de hardware. Este repo (V2C Trydan NG) es mantenido activamente por Àlex Garcia Vilà (@alexgarciavila)`
+- Estado: `activo; continuación (fork) del proyecto original archivado por su autor (Rain1971/V2C_trydant) tras un fallo de hardware (el mantenedor anterior se quedó sin máquina de pruebas). Este repo (V2C Trydan NG) es mantenido activamente por Àlex Garcia Vilà (@alexgarciavila), quien sí dispone de una máquina V2C Trydan real para pruebas`
 - Dominio funcional: `carga de vehículo eléctrico (cargador V2C Trydan) y control de carga por precio de la luz (PVPC)`
 - Plataforma objetivo: `Home Assistant (instancia del usuario), comunicación HTTP local con el dispositivo`
 - Idioma del proyecto/producto: `español (entidades y estados en español; README en inglés y español; traducciones en 7 idiomas)`
@@ -265,7 +265,7 @@ Una tarea se considera terminada solo si:
 - Si cambia lógica y existe suite de tests, hay tests nuevos o actualizados.
 - Si cambian entidades, servicios, eventos o configuración, el README (en y es) está alineado.
 - Si cambian dependencias, `manifest.json` las refleja.
-- Se reportan riesgos, límites y supuestos en la respuesta final (especialmente: nada se ha probado contra un dispositivo real, ver sección 14).
+- Se reportan riesgos, límites y supuestos en la respuesta final (en particular: si un cambio concreto no se ha llegado a probar contra el dispositivo real, decirlo explícitamente; ver sección 14).
 
 ---
 
@@ -311,7 +311,7 @@ a este proyecto; ignorarlas salvo petición explícita.
 
 ## 14. Limitaciones y advertencias
 
-- No hay acceso a un dispositivo V2C Trydan real: el upstream se archivó por fallo de hardware. Ningún cambio puede validarse end-to-end contra el cargador; declarar siempre este límite en QA y revisiones.
+- El mantenedor actual (Àlex Garcia Vilà) sí dispone de un dispositivo V2C Trydan real para pruebas (el upstream original se archivó porque su autor anterior se quedó sin máquina de pruebas tras un fallo de hardware, no por falta de acceso en este repo). Aun así, los cambios no se consideran validados end-to-end contra el cargador real hasta que se pruebe explícitamente en la instancia del usuario; QA y revisiones deben declarar si un cambio concreto se ha probado o no contra el hardware real.
 - La lógica de reparación de JSON (`arreglar_json_invalido`) contiene apaños específicos de versiones de firmware (ej. `"1.6.13"`); tocarla con extremo cuidado y sin eliminar compatibilidad.
 - `sensor.py` concentra mucha lógica (precio PVPC, carga inteligente, eventos); evitar cambios masivos sin plan incremental.
 - No asumir credenciales ni acceso externo; la integración es 100% local.
