@@ -1,23 +1,13 @@
-# [DEPRECATED] V2C Trydan
+# V2C Trydan NG
 
-> **Aviso:** Este proyecto ya no cuenta con soporte ni mantenimiento.
-
-## Estado: Discontinuado
-Debido a un fallo de hardware en el dispositivo específico para el cual se desarrolló este proyecto, me es imposible continuar realizando pruebas, depuraciones o publicar actualizaciones. Al no tener ya acceso al entorno físico necesario para el desarrollo, este repositorio ha sido archivado.
-
-### ¿Puedo seguir usándolo?
-¡Sí! El código permanece disponible con fines educativos o como referencia. Eres libre de:
-* Hacer un **Fork** del repositorio si deseas continuar el desarrollo por tu cuenta.
-* Utilizar el código existente bajo los términos de la licencia del proyecto.
-
-Gracias a todos los que mostraron interés o contribuyeron a este proyecto.
-
-# CARGADOR DE COCHE V2C TRYDAN para HOME ASSISTANT
+**Componente de cargador de coche V2C Trydan para Home Assistant**
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Default-orange.svg)](https://github.com/hacs/integration)
-[![GitHub release](https://img.shields.io/github/release/Rain1971/V2C_trydant.svg)](https://GitHub.com//Rain1971/V2C_trydant/releases/)
-[![en](https://img.shields.io/badge/lang-en-red.svg)](https://github.com/Rain1971/V2C_trydant/blob/main/README.md)
-[![es](https://img.shields.io/badge/lang-es-yellow.svg)](https://github.com/Rain1971/V2C_trydant/blob/main/README.es.md)
+[![GitHub release](https://img.shields.io/github/release/alexgarciavila/V2C_trydan_NG.svg)](https://GitHub.com//alexgarciavila/V2C_trydan_NG/releases/)
+[![en](https://img.shields.io/badge/lang-en-red.svg)](https://github.com/alexgarciavila/V2C_trydan_NG/blob/main/README.md)
+[![es](https://img.shields.io/badge/lang-es-yellow.svg)](https://github.com/alexgarciavila/V2C_trydan_NG/blob/main/README.es.md)
+
+> **Estado del proyecto:** el proyecto original fue archivado por su autor, [Rain1971](https://github.com/Rain1971), tras un fallo de hardware que le dejó sin un dispositivo real con el que seguir probándolo y manteniéndolo. **V2C Trydan NG** es un fork activo que retoma el mantenimiento bajo un nuevo nombre. Mantenedor actual: [Àlex Garcia Vilà](https://github.com/alexgarciavila) (@alexgarciavila). Muchas gracias a Rain1971 por el trabajo original sobre el que se construye este proyecto.
 
 Esta integración expone la información y funciones disponibles en [V2C trydan](https://v2charge.com/trydan/) directamente a través de la interfaz http en Home Assistant.
 
@@ -33,7 +23,7 @@ Si quieres usar la función de control de carga basada en el precio, debes insta
 
 # Instalación:
 
-* Añade este repositorio en HACS ( [https://github.com/Rain1971/V2C_trydant.git](https://github.com/Rain1971/V2C_trydant.git) )
+* Añade este repositorio en HACS ( [https://github.com/alexgarciavila/V2C_trydan_NG.git](https://github.com/alexgarciavila/V2C_trydan_NG.git) )
 ![Charts](./images/install1.png)
 ![Charts](./images/install2.png)
 * Reinicia Home Assistant
@@ -113,8 +103,8 @@ mode: single
 
 # Ejemplos PANTALLA:
 
-* Usa [example.yaml](https://raw.githubusercontent.com/Rain1971/V2C_trydant/main/lovelance/example.yaml)
-* Para Control pvpc [example_pvpc.yaml](https://raw.githubusercontent.com/Rain1971/V2C_trydant/main/lovelance/example_pvpc.yaml)
-* Para Control pvpc, version compacta [example_pvpc_compact.yaml](https://raw.githubusercontent.com/Rain1971/V2C_trydant/main/lovelance/example_pvpc_compact.yaml)
+* Usa [example.yaml](https://raw.githubusercontent.com/alexgarciavila/V2C_trydan_NG/main/lovelance/example.yaml)
+* Para Control pvpc [example_pvpc.yaml](https://raw.githubusercontent.com/alexgarciavila/V2C_trydan_NG/main/lovelance/example_pvpc.yaml)
+* Para Control pvpc, version compacta [example_pvpc_compact.yaml](https://raw.githubusercontent.com/alexgarciavila/V2C_trydan_NG/main/lovelance/example_pvpc_compact.yaml)
 
 ![Charts](./images/example_pvpc_compact.png)

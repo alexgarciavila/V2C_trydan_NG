@@ -129,3 +129,14 @@ dmypy.json
 .pyre/
 
 .vscode/
+
+# ============================================================================
+# Claude Code / Agentes framework (no comitear)
+# ============================================================================
+
+# Plantillas genéricas de kit multi-proyecto
+AGENTS_TEMPLATE.md
+CLAUDE_TEMPLATE.md
+
+# Configuración local de máquina/sesión
+.claude/settings.local.json
