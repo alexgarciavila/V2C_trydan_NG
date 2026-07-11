@@ -3,6 +3,7 @@ from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
 from homeassistant.const import CONF_IP_ADDRESS
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 import aiohttp
 import asyncio
 
@@ -62,12 +63,12 @@ class V2CtrydanConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def _test_connection(self, ip_address: str) -> bool:
         """Test connection to the V2C Trydan device."""
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    f"http://{ip_address}/RealTimeData",
-                    timeout=aiohttp.ClientTimeout(total=10)
-                ) as response:
-                    return response.status == 200
+            session = async_get_clientsession(self.hass)
+            async with session.get(
+                f"http://{ip_address}/RealTimeData",
+                timeout=aiohttp.ClientTimeout(total=10)
+            ) as response:
+                return response.status == 200
         except Exception:
             return False
 
