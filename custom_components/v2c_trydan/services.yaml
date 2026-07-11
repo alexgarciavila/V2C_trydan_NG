@@ -1,0 +1,116 @@
+set_min_intensity:
+  name: Set minimum intensity
+  description: Set the minimum charging intensity (MinIntensity) on the V2C Trydan charger.
+  fields:
+    min_intensity:
+      name: Minimum intensity
+      description: Minimum charging current in amperes. Must be an integer between 6 and 32.
+      required: true
+      example: 6
+      selector:
+        number:
+          min: 6
+          max: 32
+          step: 1
+          unit_of_measurement: A
+          mode: box
+
+set_max_intensity:
+  name: Set maximum intensity
+  description: Set the maximum charging intensity (MaxIntensity) on the V2C Trydan charger.
+  fields:
+    max_intensity:
+      name: Maximum intensity
+      description: Maximum charging current in amperes. Must be an integer between 6 and 32.
+      required: true
+      example: 32
+      selector:
+        number:
+          min: 6
+          max: 32
+          step: 1
+          unit_of_measurement: A
+          mode: box
+
+set_intensity:
+  name: Set intensity
+  description: Set the charging intensity (Intensity) on the V2C Trydan charger.
+  fields:
+    intensity:
+      name: Intensity
+      description: Charging current in amperes. Must be an integer between 6 and 32.
+      required: true
+      example: 16
+      selector:
+        number:
+          min: 6
+          max: 32
+          step: 1
+          unit_of_measurement: A
+          mode: box
+
+set_dynamic_power_mode:
+  name: Set dynamic power mode
+  description: Set the dynamic power mode (DynamicPowerMode) on the V2C Trydan charger.
+  fields:
+    DynamicPowerMode:
+      name: Dynamic power mode
+      description: Dynamic power mode value. Must be an integer.
+      required: true
+      example: 0
+      selector:
+        number:
+          min: 0
+          max: 5
+          step: 1
+          mode: box
+
+set_min_intensity_slider:
+  name: Set minimum intensity (slider)
+  description: Set the minimum charging intensity from a slider helper input (v2c_min_intensity) on the V2C Trydan charger.
+  fields:
+    v2c_min_intensity:
+      name: Minimum intensity
+      description: Minimum charging current in amperes. Must be an integer between 6 and 32.
+      required: true
+      example: 6
+      selector:
+        number:
+          min: 6
+          max: 32
+          step: 1
+          unit_of_measurement: A
+          mode: slider
+
+set_max_intensity_slider:
+  name: Set maximum intensity (slider)
+  description: Set the maximum charging intensity from a slider helper input (v2c_max_intensity) on the V2C Trydan charger.
+  fields:
+    v2c_max_intensity:
+      name: Maximum intensity
+      description: Maximum charging current in amperes. Must be an integer between 6 and 32.
+      required: true
+      example: 32
+      selector:
+        number:
+          min: 6
+          max: 32
+          step: 1
+          unit_of_measurement: A
+          mode: slider
+
+set_dynamic_power_mode_slider:
+  name: Set dynamic power mode (slider)
+  description: Set the dynamic power mode from a slider helper input (v2c_dynamic_power_mode) on the V2C Trydan charger.
+  fields:
+    v2c_dynamic_power_mode:
+      name: Dynamic power mode
+      description: Dynamic power mode value. Must be an integer.
+      required: true
+      example: 0
+      selector:
+        number:
+          min: 0
+          max: 5
+          step: 1
+          mode: slider

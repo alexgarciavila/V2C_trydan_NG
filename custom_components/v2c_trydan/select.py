@@ -2,38 +2,14 @@ from homeassistant.components.select import SelectEntity
 from homeassistant.const import CONF_IP_ADDRESS
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 import logging
 import aiohttp
 import asyncio
-import json
 
 from . import DOMAIN
-from .json_repair import repair_v2c_json
 
 _LOGGER = logging.getLogger(__name__)
-
-def _parse_response_json(text: str, content_type: str = '') -> dict:
-    """Parse JSON response, handling V2C firmware issues.
-
-    Handles:
-    - Incorrect Content-Type (text instead of application/json)
-    - Malformed JSON via the shared ``repair_v2c_json`` workarounds (duplicate
-      FirmwareVersion fields, unquoted version numbers, missing ReadyState comma),
-      so this path applies the same fixes as the coordinator.
-    """
-    # Log content-type issues for debugging
-    if content_type and 'application/json' not in content_type.lower():
-        _LOGGER.debug(f"Device returned non-JSON content-type: {content_type}, parsing as JSON anyway")
-
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        _LOGGER.debug("JSON parsing failed, attempting to fix malformed response")
-        try:
-            return repair_v2c_json(text)
-        except json.JSONDecodeError as e:
-            _LOGGER.error(f"Failed to parse malformed JSON: {e}")
-            raise
 
 # Dynamic Power Mode options with translation keys
 DYNAMIC_POWER_MODE_OPTIONS = [
@@ -47,17 +23,21 @@ DYNAMIC_POWER_MODE_OPTIONS = [
 
 async def async_setup_entry(hass, config_entry, async_add_entities):
     ip_address = config_entry.data[CONF_IP_ADDRESS]
-    
-    async_add_entities([DynamicPowerModeSelect(hass, ip_address)])
 
-class DynamicPowerModeSelect(SelectEntity):
+    # Reuse the shared coordinator so the selector reads the current state from
+    # the periodic RealTimeData poll instead of issuing its own HTTP requests.
+    coordinator = hass.data[DOMAIN][config_entry.entry_id]
+
+    async_add_entities([DynamicPowerModeSelect(coordinator)])
+
+class DynamicPowerModeSelect(CoordinatorEntity, SelectEntity):
     """Representation of Dynamic Power Mode selector entity."""
-    
-    def __init__(self, hass, ip_address):
+
+    def __init__(self, coordinator):
         """Initialize the select entity."""
-        self._hass = hass
-        self._ip_address = ip_address
-        self._current_option = None
+        super().__init__(coordinator)
+        self._coordinator = coordinator
+        self._ip_address = coordinator.ip_address
         self._attr_has_entity_name = True
         self._attr_options = DYNAMIC_POWER_MODE_OPTIONS
         self._attr_translation_key = "dynamic_power_mode"
@@ -84,28 +64,36 @@ class DynamicPowerModeSelect(SelectEntity):
 
     @property
     def current_option(self):
-        return self._current_option
+        """Return the current option from the shared coordinator data."""
+        if self._coordinator.data:
+            dynamic_power_mode = self._coordinator.data.get("DynamicPowerMode")
+            if dynamic_power_mode is not None and 0 <= dynamic_power_mode <= 5:
+                return self._attr_options[dynamic_power_mode]
+            if dynamic_power_mode is not None:
+                _LOGGER.warning(f"Invalid DynamicPowerMode value: {dynamic_power_mode}")
+        return None
 
     async def async_select_option(self, option: str) -> None:
         """Change the selected option."""
         if option not in self._attr_options:
             _LOGGER.error(f"Invalid option: {option}")
             return
-            
+
         # Get the numeric value for this option
         mode_value = self._attr_options.index(option)
-        
+
         await self._set_dynamic_power_mode(mode_value)
-        self._current_option = option
-        self.async_write_ha_state()
+        # Refresh the shared coordinator so current_option reflects the new
+        # device state on the next poll (same pattern as number.py).
+        await self._coordinator.async_request_refresh()
 
     async def _set_dynamic_power_mode(self, mode_value: int):
         """Set dynamic power mode on the device."""
         if not self._ip_address:
             _LOGGER.error("IP address not available for DynamicPowerModeSelect")
             return
-            
-        session = async_get_clientsession(self._hass)
+
+        session = async_get_clientsession(self.hass)
         url = f"http://{self._ip_address}/write/DynamicPowerMode={mode_value}"
         try:
             timeout = aiohttp.ClientTimeout(total=5, connect=2)
@@ -126,32 +114,3 @@ class DynamicPowerModeSelect(SelectEntity):
         except Exception as err:
             _LOGGER.error(f"Unexpected error setting dynamic power mode: {err}")
             raise
-
-    async def async_update(self):
-        """Fetch the current state from the device."""
-        if not self._ip_address:
-            return
-            
-        session = async_get_clientsession(self._hass)
-        url = f"http://{self._ip_address}/RealTimeData"
-        try:
-            timeout = aiohttp.ClientTimeout(total=5, connect=2)
-            async with session.get(url, timeout=timeout) as response:
-                response.raise_for_status()
-                
-                # Handle firmware response issues
-                text = await response.text()
-                content_type = response.headers.get('content-type', '')
-                data = _parse_response_json(text, content_type)
-                
-                # Get the DynamicPowerMode value from the response
-                dynamic_power_mode = data.get("DynamicPowerMode")
-                if dynamic_power_mode is not None and 0 <= dynamic_power_mode <= 5:
-                    self._current_option = self._attr_options[dynamic_power_mode]
-                else:
-                    _LOGGER.warning(f"Invalid DynamicPowerMode value: {dynamic_power_mode}")
-                    
-        except (asyncio.TimeoutError, aiohttp.ClientError, ValueError) as err:
-            _LOGGER.error(f"Error fetching dynamic power mode: {err}")
-        except Exception as err:
-            _LOGGER.error(f"Unexpected error fetching dynamic power mode: {err}")

@@ -106,8 +106,24 @@ class V2CtrydanDataUpdateCoordinator(DataUpdateCoordinator):
                         _LOGGER.debug(f"JSON parsing failed, attempting to fix malformed response")
                         return arreglar_json_invalido(text)
                 else:
+                    # ``raise_for_status()`` only raises for status codes >= 400,
+                    # so a non-200 2xx/3xx response (e.g. 201, 204, 304) would fall
+                    # through and return ``None`` implicitly. A Trydan in normal
+                    # operation always answers 200 with a JSON body, so any other
+                    # status is treated as an explicit HTTP error handled like the
+                    # rest of the client failures below.
                     response.raise_for_status()
-                    
+                    raise client_exceptions.ClientResponseError(
+                        response.request_info,
+                        response.history,
+                        status=response.status,
+                        message=(
+                            f"Unexpected HTTP status {response.status} from "
+                            f"{self.ip_address}"
+                        ),
+                        headers=response.headers,
+                    )
+
         except client_exceptions.ClientConnectorError as err:
             _LOGGER.debug(f"Connection error to {self.ip_address}: {err}")
             raise

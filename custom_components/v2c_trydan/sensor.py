@@ -533,6 +533,12 @@ class ChargeKmSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def native_value(self):
+        # Guard defensivo: el coordinator puede no tener datos aun justo tras
+        # el arranque (antes del primer refresh). Sin esta comprobacion,
+        # coordinator.data seria None y .get() lanzaria AttributeError. Se usa
+        # el mismo patron `is None` que el resto de sensores del archivo.
+        if self.coordinator.data is None:
+            return 0
         charge_energy = self.coordinator.data.get("ChargeEnergy", 0)
         charge_km = (charge_energy / (self._kwh_per_100km / 100)) * 0.92
         return round(charge_km, 2)
@@ -587,8 +593,7 @@ class NumericalStatus(CoordinatorEntity, SensorEntity):
         elif Charge_State == "Manguera conectada (CARGANDO)":
             return 2
         else:
-            return Charge_State  
-        return -1
+            return Charge_State
 
     @property
     def state_class(self):
@@ -739,15 +744,16 @@ class PrecioLuzEntity(CoordinatorEntity, SensorEntity):
                     precio_luz_entity, max_price, current_hour
                 )
 
-                # Asignar la entidad de origen ANTES de acceder a
-                # extra_state_attributes: si la entidad se creo con estado None
-                # en el arranque, la propiedad devolveria None hasta esta
-                # reasignacion y las escrituras siguientes lanzarian TypeError.
+                # Asignar la entidad de origen ANTES de escribir el estado: si
+                # la entidad se creo con estado None en el arranque, native_value
+                # y extra_state_attributes devolverian None hasta esta
+                # reasignacion. La property extra_state_attributes ya construye
+                # ValidHours/ValidHoursNextDay/TotalHours a partir de
+                # self.valid_hours / self.valid_hours_next_day / self.total_hours
+                # (actualizados arriba), por lo que no hacen falta escrituras
+                # adicionales: hacerlas sobre extra_state_attributes serian no-op
+                # porque la property devuelve una copia efimera en cada acceso.
                 self.v2c_precio_luz_entity = precio_luz_entity
-
-                self.extra_state_attributes["ValidHours"] = self.valid_hours
-                self.extra_state_attributes["ValidHoursNextDay"] = self.valid_hours_next_day
-                self.extra_state_attributes["TotalHours"] = self.total_hours
 
                 await pause_or_resume_charging(
                     self.state, max_price, paused_switch, v2c_carga_pvpc_switch
