@@ -1,0 +1,31 @@
+# Dependencias de DESARROLLO/TEST para v2c_trydan (custom_components).
+#
+# Estas dependencias NUNCA deben mezclarse con custom_components/v2c_trydan/manifest.json:
+# ese fichero declara las dependencias de RUNTIME que instala Home Assistant/HACS
+# para el usuario final (aiohttp, tenacity). Este fichero solo se usa en local/CI
+# para poder ejecutar la suite de tests de este repo.
+#
+# Instalacion:
+#   pip install -r requirements_test.txt
+#
+# Requiere Python 3.11+ (misma base que exige Home Assistant reciente).
+
+pytest>=8.0.0,<9.0.0
+pytest-homeassistant-custom-component>=0.13.200,<0.14.0
+# pytest-homeassistant-custom-component pins una version exacta de pytest-cov
+# (y de pytest) como dependencia transitiva; se deja un rango amplio para no
+# entrar en conflicto con esa version fijada.
+pytest-cov>=5.0.0,<7.0.0
+
+# Usado en tests/conftest.py para mockear las respuestas HTTP del firmware
+# V2C Trydan (GET /RealTimeData, GET /write/<Parametro>=<valor>) sin depender
+# de un dispositivo real ni de mocks manuales de aiohttp.ClientSession.
+aioresponses>=0.7.6,<0.8.0
+
+# NOTA: pytest-homeassistant-custom-component NO instala automaticamente las
+# dependencias de RUNTIME declaradas en custom_components/v2c_trydan/manifest.json
+# (aiohttp ya viene con homeassistant; tenacity no). Se fija aqui el mismo
+# rango de version que el manifest para poder importar coordinator.py en los
+# tests, sin que esto sustituya al manifest.json como fuente de verdad de
+# dependencias del componente.
+tenacity>=8.0.0
