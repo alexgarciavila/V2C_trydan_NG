@@ -138,5 +138,11 @@ dmypy.json
 AGENTS_TEMPLATE.md
 CLAUDE_TEMPLATE.md
 
-# Configuración local de máquina/sesión
-.claude/settings.local.json
+# Instrucciones operativas de agentes: uso local del mantenedor, no forman
+# parte del custom_component distribuido via HACS
+AGENTS.md
+CLAUDE.md
+.claude/
+agents/
+skills/
+specs/

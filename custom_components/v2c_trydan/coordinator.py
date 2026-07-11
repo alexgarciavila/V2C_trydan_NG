@@ -1,7 +1,6 @@
 import logging
 from datetime import timedelta
 import json
-import re
 import aiohttp
 from aiohttp import ClientError, client_exceptions, ClientSession
 from homeassistant.helpers.update_coordinator import (
@@ -11,32 +10,21 @@ from homeassistant.helpers.update_coordinator import (
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from tenacity import retry, stop_after_attempt, wait_fixed, RetryError
 
+from .json_repair import repair_v2c_json
+
 _LOGGER = logging.getLogger(__name__)
 
 def arreglar_json_invalido(json_str: str) -> dict:
     """Fix malformed JSON responses from V2C Trydan devices.
-    
-    Handles common issues:
-    - Duplicated FirmwareVersion fields
-    - Missing quotes on version numbers
-    - Malformed structure
+
+    Delegates the firmware-specific workarounds to the shared ``repair_v2c_json``
+    helper so the coordinator and the select entity apply identical fixes, and
+    wraps a persistent parsing failure as ``UpdateFailed``.
     """
-    # Remove duplicate FirmwareVersion fields (keep the last one)
-    firmware_pattern = r'"FirmwareVersion":"[^"]*",'
-    matches = list(re.finditer(firmware_pattern, json_str))
-    if len(matches) > 1:
-        # Remove all but the last occurrence
-        for match in matches[:-1]:
-            json_str = json_str[:match.start()] + json_str[match.end():]
-    
-    # Fix version numbers without quotes
-    cadena = json_str.replace("1.6.13", "\"1.6.13\"")
-    json_str_arreglado = cadena.replace("\"ReadyState\":", ",\"ReadyState\":")
-    
     try:
-        return json.loads(json_str_arreglado)
+        return repair_v2c_json(json_str)
     except json.JSONDecodeError as e:
-        _LOGGER.error(f"Error al parsear JSON: {str(e)}\nJSON: {json_str_arreglado}")
+        _LOGGER.error(f"Error al parsear JSON: {str(e)}\nJSON: {json_str}")
         raise UpdateFailed(f"Error al parsear los datos JSON: {str(e)}")
 
 class V2CtrydanDataUpdateCoordinator(DataUpdateCoordinator):
@@ -84,9 +72,13 @@ class V2CtrydanDataUpdateCoordinator(DataUpdateCoordinator):
             
         except Exception as e:
             self._consecutive_errors += 1
-            if not self.error_reportado:
-                self.error_reportado = True
-                _LOGGER.error(f"Unexpected error communicating with {self.ip_address}: {e}")
+            if self._consecutive_errors >= self.MAX_CONSECUTIVE_ERRORS:
+                if not self.error_reportado:
+                    self.error_reportado = True
+                    _LOGGER.error(
+                        f"Persistent errors communicating with {self.ip_address} "
+                        f"after {self._consecutive_errors} attempts: {e}"
+                    )
             raise UpdateFailed(f"Error fetching data from {self.ip_address}: {e}")
 
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
@@ -129,5 +121,5 @@ class V2CtrydanDataUpdateCoordinator(DataUpdateCoordinator):
             _LOGGER.error(f"JSON parsing error from {self.ip_address}: {e}")
             raise
         except Exception as e:
-            _LOGGER.error(f"Unexpected error fetching data from {self.ip_address}: {e}")
+            _LOGGER.debug(f"Unexpected error fetching data from {self.ip_address}: {e}")
             raise

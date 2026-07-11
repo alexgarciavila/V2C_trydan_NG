@@ -11,6 +11,8 @@
 
 This integration exposes the information and functions made available by [V2C trydan](https://v2charge.com/trydan/) directly via http interface in Home Assistant.
 
+See [CHANGELOG.md](CHANGELOG.md) for the list of changes per version.
+
 # Prerequisites
 
 This integration supports network connection to V2C trydan directly, so that take note of the V2C trydan static IP address previously. 

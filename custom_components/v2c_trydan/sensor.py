@@ -35,6 +35,7 @@ from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator,
     UpdateFailed,
 )
+from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN, CONF_KWH_PER_100KM, CONF_PRECIO_LUZ
 from .coordinator import V2CtrydanDataUpdateCoordinator
@@ -208,13 +209,25 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
         sensors.append(ChargeKmSensor(coordinator, ip_address, kwh_per_100km))
         sensors.append(NumericalStatus(coordinator, ip_address))
 
-        # Add PVPC price sensor if configured
+        # Add PVPC price sensor if configured.
+        # No dependemos de que el estado de la entidad de origen ya este
+        # publicado en este instante: durante el arranque de Home Assistant la
+        # entidad PVPC puede no existir todavia y hass.states.get() devolveria
+        # None, dejando este sensor sin crear hasta un reload manual. Creamos
+        # siempre la entidad si la opcion esta configurada; el ciclo de refresco
+        # periodico (async_added_to_hass -> update_state) la pone al dia en
+        # cuanto la entidad de origen esta disponible.
         precio_luz_entity_id = config_entry.options.get(CONF_PRECIO_LUZ)
         if precio_luz_entity_id:
             precio_luz_entity = hass.states.get(precio_luz_entity_id)
-            if precio_luz_entity:
-                sensors.append(PrecioLuzEntity(coordinator, precio_luz_entity, ip_address, config_entry))
-                _LOGGER.debug("PrecioLuzEntity added to sensors list")
+            if precio_luz_entity is None:
+                _LOGGER.debug(
+                    "Estado de %s aun no disponible en el arranque; se crea "
+                    "PrecioLuzEntity y se actualizara al estar lista la fuente",
+                    precio_luz_entity_id,
+                )
+            sensors.append(PrecioLuzEntity(coordinator, precio_luz_entity, ip_address, config_entry))
+            _LOGGER.debug("PrecioLuzEntity added to sensors list")
     else:
         _LOGGER.warning("No coordinator data available, sensors will not be created")
 
@@ -450,14 +463,6 @@ class ChargeKmSensor(CoordinatorEntity, SensorEntity):
                 #_LOGGER.debug("Charging unpaused")
                 self._charging_paused = False
 
-    async def handle_km_to_charge_state_change(self, event):
-        entity_id = event.data.get("entity_id")
-        
-        if entity_id == "number.v2c_km_to_charge":
-            old_state = event.data.get("old_state")
-            new_state = event.data.get("new_state")
-            #_LOGGER.debug(f"Entity {entity_id} changed from {old_state} to {new_state}")
-
     async def async_set_km_to_charge(self, value):
         await self.hass.services.async_call(
             "number",
@@ -467,9 +472,21 @@ class ChargeKmSensor(CoordinatorEntity, SensorEntity):
 
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
-        async_track_time_interval(self.hass, self.check_and_pause_charging, timedelta(seconds=10))
-        async_track_state_change_event(self.hass, ["switch.v2c_trydan_switch_paused"], self.handle_paused_state_change)
-        self.hass.bus.async_listen("state_changed", self.handle_km_to_charge_state_change)
+        # Registrar los listeners via async_on_remove para que HA los cancele
+        # automaticamente al desmontar la entidad y no se acumulen duplicados
+        # en cada reload de la integracion.
+        self.async_on_remove(
+            async_track_time_interval(
+                self.hass, self.check_and_pause_charging, timedelta(seconds=10)
+            )
+        )
+        self.async_on_remove(
+            async_track_state_change_event(
+                self.hass,
+                ["switch.v2c_trydan_switch_paused"],
+                self.handle_paused_state_change,
+            )
+        )
 
     async def check_and_pause_charging(self, now):
         paused_switch = self.hass.states.get("switch.v2c_trydan_switch_paused")
@@ -477,20 +494,23 @@ class ChargeKmSensor(CoordinatorEntity, SensorEntity):
             return
 
         km_to_charge = self.hass.states.get("number.v2c_km_to_charge")
-        if km_to_charge is not None:
-            try:
-                try:
-                    km_to_charge_float = float(km_to_charge.state)
-                except ValueError:
-                    km_to_charge_float = -1.0
+        if km_to_charge is None:
+            return
 
-                if self.state >= km_to_charge_float and km_to_charge_float != 0:
-                    await self.hass.services.async_call("switch", "turn_on", {"entity_id": "switch.v2c_trydan_switch_paused"})
-                    await self.hass.services.async_call("switch", "turn_on", {"entity_id": "switch.v2c_trydan_switch_locked"})
-                    await self.async_set_km_to_charge(0)
-                    self.hass.bus.async_fire("v2c_trydan.charging_complete")
-            except Exception as e:
-                _LOGGER.error(f"Error en carga de kilometros el valor esperado es: {km_to_charge.state} y el error {e}")
+        try:
+            km_to_charge_float = float(km_to_charge.state)
+        except (ValueError, TypeError):
+            _LOGGER.debug(f"km_to_charge no parseable ({km_to_charge.state}); se omite el ciclo de comprobacion de carga completa")
+            return
+
+        try:
+            if self.state >= km_to_charge_float and km_to_charge_float != 0:
+                await self.hass.services.async_call("switch", "turn_on", {"entity_id": "switch.v2c_trydan_switch_paused"})
+                await self.hass.services.async_call("switch", "turn_on", {"entity_id": "switch.v2c_trydan_switch_locked"})
+                await self.async_set_km_to_charge(0)
+                self.hass.bus.async_fire("v2c_trydan.charging_complete")
+        except Exception as e:
+            _LOGGER.error(f"Error en carga de kilometros el valor esperado es: {km_to_charge.state} y el error {e}")
 
     @property
     def unique_id(self):
@@ -668,7 +688,7 @@ class PrecioLuzEntity(CoordinatorEntity, SensorEntity):
                 next_day_price_attr = f"price_next_day_{i:02d}h"
 
                 if price_attr in attributes and float(attributes[price_attr]) <= max_price:
-                    if i > current_hour:
+                    if i >= current_hour:
                         valid_hours.append(i)
                         total_hours += 1
 
@@ -680,7 +700,14 @@ class PrecioLuzEntity(CoordinatorEntity, SensorEntity):
     
         async def pause_or_resume_charging(current_state, max_price, paused_switch, v2c_carga_pvpc_switch):
             if v2c_carga_pvpc_switch.state == "on":
-                if float(current_state) <= max_price:
+                try:
+                    current_price = float(current_state)
+                except (ValueError, TypeError):
+                    _LOGGER.debug(
+                        f"Precio actual no parseable ({current_state}); se omite pausa/reanudacion de carga PVPC"
+                    )
+                    return
+                if current_price <= max_price:
                     await self.hass.services.async_call("switch", "turn_off", {"entity_id": paused_switch.entity_id})
                 else:
                     await self.hass.services.async_call("switch", "turn_on", {"entity_id": paused_switch.entity_id})
@@ -699,12 +726,24 @@ class PrecioLuzEntity(CoordinatorEntity, SensorEntity):
                 precio_luz_entity = None
 
             if all([precio_luz_entity, paused_switch, v2c_carga_pvpc_switch, max_price_entity]):
-                max_price = float(max_price_entity.state)
-                current_hour = datetime.now().hour
+                try:
+                    max_price = float(max_price_entity.state)
+                except (ValueError, TypeError):
+                    _LOGGER.debug(
+                        f"max_price no parseable ({max_price_entity.state}); se omite el ciclo de control de carga PVPC"
+                    )
+                    return
+                current_hour = dt_util.now().hour
 
                 self.valid_hours, self.valid_hours_next_day, self.total_hours = await extract_price_attrs(
                     precio_luz_entity, max_price, current_hour
                 )
+
+                # Asignar la entidad de origen ANTES de acceder a
+                # extra_state_attributes: si la entidad se creo con estado None
+                # en el arranque, la propiedad devolveria None hasta esta
+                # reasignacion y las escrituras siguientes lanzarian TypeError.
+                self.v2c_precio_luz_entity = precio_luz_entity
 
                 self.extra_state_attributes["ValidHours"] = self.valid_hours
                 self.extra_state_attributes["ValidHoursNextDay"] = self.valid_hours_next_day
@@ -713,8 +752,6 @@ class PrecioLuzEntity(CoordinatorEntity, SensorEntity):
                 await pause_or_resume_charging(
                     self.state, max_price, paused_switch, v2c_carga_pvpc_switch
                 )
-
-                self.v2c_precio_luz_entity = precio_luz_entity
 
                 self.async_write_ha_state()
             else:

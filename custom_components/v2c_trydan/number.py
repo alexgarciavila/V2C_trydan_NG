@@ -4,6 +4,7 @@ from homeassistant.const import DEVICE_DEFAULT_NAME, CONF_IP_ADDRESS
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 import logging
 import aiohttp
@@ -221,9 +222,9 @@ class MinIntensityNumber(CoordinatorEntity, NumberEntity):
             raise
 
 
-class KmToChargeNumber(NumberEntity):
+class KmToChargeNumber(RestoreEntity, NumberEntity):
     """Representation of km to charge number entity."""
-    
+
     def __init__(self, hass, ip_address):
         """Initialize the number entity."""
         self._hass = hass
@@ -231,6 +232,19 @@ class KmToChargeNumber(NumberEntity):
         self._state = 0
         self._attr_has_entity_name = True
         self._attr_translation_key = "km_to_charge"
+
+    async def async_added_to_hass(self):
+        """Restore the last known value after a Home Assistant restart."""
+        await super().async_added_to_hass()
+        last_state = await self.async_get_last_state()
+        if last_state is not None and last_state.state not in (None, "unknown", "unavailable"):
+            try:
+                self._state = float(last_state.state)
+            except (ValueError, TypeError):
+                _LOGGER.warning(
+                    "Could not restore v2c_km_to_charge from '%s', keeping default",
+                    last_state.state,
+                )
 
     @property
     def unique_id(self):
@@ -364,9 +378,9 @@ class IntensityNumber(CoordinatorEntity, NumberEntity):
             _LOGGER.error(f"Error setting intensity: {err}")
             raise
 
-class MaxPrice(NumberEntity):
+class MaxPrice(RestoreEntity, NumberEntity):
     """Representation of max price number entity."""
-    
+
     def __init__(self, hass, ip_address):
         """Initialize the number entity."""
         self._hass = hass
@@ -374,6 +388,19 @@ class MaxPrice(NumberEntity):
         self._state = 0
         self._attr_has_entity_name = True
         self._attr_translation_key = "max_price"
+
+    async def async_added_to_hass(self):
+        """Restore the last known value after a Home Assistant restart."""
+        await super().async_added_to_hass()
+        last_state = await self.async_get_last_state()
+        if last_state is not None and last_state.state not in (None, "unknown", "unavailable"):
+            try:
+                self._state = float(last_state.state)
+            except (ValueError, TypeError):
+                _LOGGER.warning(
+                    "Could not restore v2c_MaxPrice from '%s', keeping default",
+                    last_state.state,
+                )
 
     @property
     def unique_id(self):
