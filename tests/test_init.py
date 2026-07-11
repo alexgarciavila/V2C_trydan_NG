@@ -13,12 +13,11 @@ Cubre:
   ``async_write_dynamic_power_mode``): caso exito, caso error HTTP y caso
   timeout, usando ``mock_v2c_http`` (nunca red real).
 
-Nota sobre el caso "timeout" de las funciones de escritura: ver el
-HALLAZGO documentado junto a
-``test_async_set_min_intensity_timeout_propagates_uncaught`` mas abajo.
-No se modifica codigo productivo (fuera del alcance de test-agent);
-se documenta el comportamiento actual como evidencia para
-``bugfix-agent``/``dev-agent``.
+Nota sobre el caso "timeout" de las funciones de escritura: el HALLAZGO
+P2-B (``asyncio.TimeoutError`` no capturado, se propagaba sin loguear)
+quedo corregido; las funciones de escritura ahora capturan tambien
+``asyncio.TimeoutError``. Ver los tests de regresion
+``test_async_set_min_intensity_timeout_logs_error`` y equivalentes.
 """
 from __future__ import annotations
 
@@ -547,30 +546,27 @@ async def test_async_set_min_intensity_http_error_logs_error(hass, mock_v2c_http
     assert "Error setting min intensity" in caplog.text
 
 
-async def test_async_set_min_intensity_timeout_propagates_uncaught(hass, mock_v2c_http):
-    """HALLAZGO (no corregido, fuera del alcance de test-agent): las
-    funciones de escritura HTTP (``async_set_min_intensity`` y equivalentes)
-    solo capturan ``aiohttp.ClientError``. Un timeout total de la peticion
-    (``asyncio.TimeoutError``, lanzado por ``aiohttp`` cuando expira
-    ``ClientTimeout(total=...)`` y que NO es subclase de
-    ``aiohttp.ClientError``) se propaga sin capturar ni loguear.
+async def test_async_set_min_intensity_timeout_logs_error(hass, mock_v2c_http, caplog):
+    """REGRESION (P2-B, corregido): las funciones de escritura HTTP
+    (``async_set_min_intensity`` y equivalentes) ahora capturan tambien
+    ``asyncio.TimeoutError`` (timeout total de la peticion, lanzado por
+    ``aiohttp`` cuando expira ``ClientTimeout(total=...)`` y que NO es
+    subclase de ``aiohttp.ClientError``), ademas de ``aiohttp.ClientError``.
 
-    Cuando esta funcion se llama desde uno de los servicios registrados en
-    ``async_setup_entry`` (p.ej. ``set_min_intensity``), el
-    ``except (ValueError, KeyError, TypeError)`` del handler del servicio
-    tampoco lo captura, por lo que el timeout se propaga sin control fuera
-    del handler de servicio de Home Assistant. Se documenta el
-    comportamiento ACTUAL como evidencia para ``bugfix-agent``/``dev-agent``
-    (posible fix: capturar tambien ``asyncio.TimeoutError`` en las funciones
-    de escritura).
+    Comportamiento correcto: el timeout se captura y se loguea como error,
+    sin propagarse fuera de la funcion. Antes del fix la excepcion se
+    propagaba sin capturar ni loguear y escapaba tambien del
+    ``except (ValueError, KeyError, TypeError)`` de los handlers de servicio.
     """
+    caplog.set_level(logging.ERROR)
     mock_v2c_http.get(
         f"http://{FAKE_IP_ADDRESS}/write/MinIntensity=10",
         exception=asyncio.TimeoutError(),
     )
 
-    with pytest.raises(asyncio.TimeoutError):
-        await async_set_min_intensity(hass, FAKE_IP_ADDRESS, 10)
+    await async_set_min_intensity(hass, FAKE_IP_ADDRESS, 10)
+
+    assert "Error setting min intensity" in caplog.text
 
 
 async def test_async_set_max_intensity_success_logs_debug(hass, mock_v2c_http, caplog):
@@ -591,15 +587,17 @@ async def test_async_set_max_intensity_http_error_logs_error(hass, mock_v2c_http
     assert "Error setting max intensity" in caplog.text
 
 
-async def test_async_set_max_intensity_timeout_propagates_uncaught(hass, mock_v2c_http):
-    """Mismo HALLAZGO que ``test_async_set_min_intensity_timeout_propagates_uncaught``."""
+async def test_async_set_max_intensity_timeout_logs_error(hass, mock_v2c_http, caplog):
+    """Misma REGRESION (P2-B) que ``test_async_set_min_intensity_timeout_logs_error``."""
+    caplog.set_level(logging.ERROR)
     mock_v2c_http.get(
         f"http://{FAKE_IP_ADDRESS}/write/MaxIntensity=32",
         exception=asyncio.TimeoutError(),
     )
 
-    with pytest.raises(asyncio.TimeoutError):
-        await async_set_max_intensity(hass, FAKE_IP_ADDRESS, 32)
+    await async_set_max_intensity(hass, FAKE_IP_ADDRESS, 32)
+
+    assert "Error setting max intensity" in caplog.text
 
 
 async def test_async_set_intensity_success_logs_debug(hass, mock_v2c_http, caplog):
@@ -620,15 +618,17 @@ async def test_async_set_intensity_http_error_logs_error(hass, mock_v2c_http, ca
     assert "Error setting intensity" in caplog.text
 
 
-async def test_async_set_intensity_timeout_propagates_uncaught(hass, mock_v2c_http):
-    """Mismo HALLAZGO que ``test_async_set_min_intensity_timeout_propagates_uncaught``."""
+async def test_async_set_intensity_timeout_logs_error(hass, mock_v2c_http, caplog):
+    """Misma REGRESION (P2-B) que ``test_async_set_min_intensity_timeout_logs_error``."""
+    caplog.set_level(logging.ERROR)
     mock_v2c_http.get(
         f"http://{FAKE_IP_ADDRESS}/write/Intensity=16",
         exception=asyncio.TimeoutError(),
     )
 
-    with pytest.raises(asyncio.TimeoutError):
-        await async_set_intensity(hass, FAKE_IP_ADDRESS, 16)
+    await async_set_intensity(hass, FAKE_IP_ADDRESS, 16)
+
+    assert "Error setting intensity" in caplog.text
 
 
 async def test_async_write_dynamic_power_mode_success_logs_debug(hass, mock_v2c_http, caplog):
@@ -651,14 +651,16 @@ async def test_async_write_dynamic_power_mode_http_error_logs_error(
     assert "Error setting dynamic power mode" in caplog.text
 
 
-async def test_async_write_dynamic_power_mode_timeout_propagates_uncaught(
-    hass, mock_v2c_http
+async def test_async_write_dynamic_power_mode_timeout_logs_error(
+    hass, mock_v2c_http, caplog
 ):
-    """Mismo HALLAZGO que ``test_async_set_min_intensity_timeout_propagates_uncaught``."""
+    """Misma REGRESION (P2-B) que ``test_async_set_min_intensity_timeout_logs_error``."""
+    caplog.set_level(logging.ERROR)
     mock_v2c_http.get(
         f"http://{FAKE_IP_ADDRESS}/write/DynamicPowerMode=2",
         exception=asyncio.TimeoutError(),
     )
 
-    with pytest.raises(asyncio.TimeoutError):
-        await async_write_dynamic_power_mode(hass, FAKE_IP_ADDRESS, 2)
+    await async_write_dynamic_power_mode(hass, FAKE_IP_ADDRESS, 2)
+
+    assert "Error setting dynamic power mode" in caplog.text

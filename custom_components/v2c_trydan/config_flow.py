@@ -4,6 +4,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.const import CONF_IP_ADDRESS
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.data_entry_flow import AbortFlow
 import aiohttp
 import asyncio
 
@@ -47,6 +48,13 @@ class V2CtrydanConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     )
                 else:
                     errors["base"] = "cannot_connect"
+            except AbortFlow:
+                # ``_abort_if_unique_id_configured`` lanza ``AbortFlow`` para
+                # abortar el flujo (p. ej. IP ya configurada -> reason
+                # "already_configured"). Es control de flujo nativo de HA, no
+                # un error de conexion: re-lanzar para no enmascararlo como
+                # ``errors["base"] = "unknown"``.
+                raise
             except Exception:
                 errors["base"] = "unknown"
         

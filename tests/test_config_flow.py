@@ -6,8 +6,8 @@ Cubre:
 - Flujo de configuracion inicial (``async_step_user``): entrada valida crea
   la entry; entrada invalida (dispositivo no responde) vuelve a mostrar el
   formulario con ``errors["base"] == "cannot_connect"``; entrada duplicada
-  (mismo ``unique_id``) — ver HALLAZGO documentado en
-  ``test_async_step_user_duplicate_unique_id_is_reported_as_unknown_error``.
+  (mismo ``unique_id``) aborta con ``reason == "already_configured"`` — ver
+  ``test_async_step_user_duplicate_unique_id_aborts_as_already_configured``.
 - Flujo de opciones (``V2CtrydanOptionsFlowHandler``): valores por defecto
   mostrados en el formulario y guardado de opciones nuevas.
 """
@@ -169,21 +169,17 @@ async def test_async_step_user_connection_error_shows_form_with_error(hass, mock
     assert result2["errors"] == {"base": "cannot_connect"}
 
 
-async def test_async_step_user_duplicate_unique_id_is_reported_as_unknown_error(
+async def test_async_step_user_duplicate_unique_id_aborts_as_already_configured(
     hass, mock_config_entry, mock_v2c_http, realtime_data
 ):
-    """HALLAZGO (no corregido, fuera del alcance de test-agent): cuando ya
-    existe una entry con el mismo ``unique_id`` (misma IP), se esperaria un
-    abort con ``reason == "already_configured"``. Sin embargo,
-    ``async_step_user`` envuelve la llamada a
-    ``self._abort_if_unique_id_configured()`` dentro de un
-    ``try/except Exception`` generico; como ``AbortFlow`` hereda de
-    ``Exception``, ese abort se captura y se traduce incorrectamente en
-    ``errors["base"] == "unknown"`` en vez de mostrar el abort esperado al
-    usuario. Se documenta el comportamiento ACTUAL como evidencia para
-    ``bugfix-agent``/``dev-agent`` (posible fix: excluir
-    ``data_entry_flow.AbortFlow`` del ``except Exception`` o no envolver esa
-    llamada en el try).
+    """Cuando ya existe una entry con el mismo ``unique_id`` (misma IP),
+    ``async_step_user`` debe abortar el flujo con
+    ``reason == "already_configured"`` (comportamiento nativo de HA).
+
+    ``self._abort_if_unique_id_configured()`` lanza ``AbortFlow``; el flujo
+    la re-lanza mediante un ``except AbortFlow: raise`` situado antes del
+    ``except Exception`` generico, de modo que el abort no queda enmascarado
+    como ``errors["base"] == "unknown"``.
     """
     mock_config_entry.add_to_hass(hass)
     mock_v2c_http.get(f"http://{FAKE_IP_ADDRESS}/RealTimeData", payload=realtime_data)
@@ -195,9 +191,8 @@ async def test_async_step_user_duplicate_unique_id_is_reported_as_unknown_error(
         result["flow_id"], user_input={"ip_address": FAKE_IP_ADDRESS}
     )
 
-    assert result2["type"] is FlowResultType.FORM
-    assert result2["step_id"] == "user"
-    assert result2["errors"] == {"base": "unknown"}
+    assert result2["type"] is FlowResultType.ABORT
+    assert result2["reason"] == "already_configured"
 
 
 # --- V2CtrydanOptionsFlowHandler ---------------------------------------------

@@ -585,7 +585,13 @@ class NumericalStatus(CoordinatorEntity, SensorEntity):
 
     @property
     def native_value(self):
-        Charge_State = self.coordinator.data.get("ChargeState", "0")      
+        # Guard defensivo homogeneo con ChargeKmSensor/V2CtrydanSensor: el
+        # coordinator puede no tener datos aun justo tras el arranque (antes del
+        # primer refresh). Sin esto, coordinator.data seria None y .get()
+        # lanzaria AttributeError. Se devuelve None ("0" no es un estado real).
+        if self.coordinator.data is None:
+            return None
+        Charge_State = self.coordinator.data.get("ChargeState", "0")
         if Charge_State == "Manguera no conectada":
             return 0
         elif Charge_State == "Manguera conectada (NO CARGA)":
@@ -608,8 +614,12 @@ class PrecioLuzEntity(CoordinatorEntity, SensorEntity):
         self.v2c_precio_luz_entity = precio_luz_entity
         self.config_entry = config_entry
         self.ip_address = ip_address
-        self.valid_hours = "0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23"
-        self.valid_hours_next_day = "0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23"
+        # Se inicializan ya como lista vacia para mantener el tipo consistente
+        # con el valor que asigna extract_price_attrs tras el primer
+        # update_state (lista de enteros). Antes eran un string separado por
+        # comas y cambiaban de tipo tras el primer refresco.
+        self.valid_hours = []
+        self.valid_hours_next_day = []
         self.total_hours = 24
         self._attr_has_entity_name = True
 
@@ -631,6 +641,27 @@ class PrecioLuzEntity(CoordinatorEntity, SensorEntity):
             model="Trydan",
             configuration_url=f"http://{self.ip_address}",
         )
+
+    @property
+    def available(self):
+        """Return if entity is available.
+
+        Esta entidad hereda ``state_class="measurement"`` y una unidad
+        (``€/kWh``) del sensor PVPC de origen, por lo que Home Assistant exige
+        un valor NUMERICO al escribir el estado cuando la entidad se reporta
+        disponible. Si la fuente no existe o esta en ``unavailable``/
+        ``unknown`` (o cualquier valor no parseable a float), degradamos a no
+        disponible en vez de propagar ``ValueError`` en
+        ``async_write_ha_state()``. Se usa el mismo guard try/except
+        (ValueError, TypeError) que el resto de la clase.
+        """
+        if self.v2c_precio_luz_entity is None:
+            return False
+        try:
+            float(self.v2c_precio_luz_entity.state)
+        except (ValueError, TypeError):
+            return False
+        return True
 
     @property
     def native_value(self):
@@ -755,10 +786,19 @@ class PrecioLuzEntity(CoordinatorEntity, SensorEntity):
                 # porque la property devuelve una copia efimera en cada acceso.
                 self.v2c_precio_luz_entity = precio_luz_entity
 
+                # Se pasa el estado CRUDO de la fuente PVPC, no self.state: el
+                # helper state de SensorEntity valida el valor numerico (la
+                # entidad es measurement con unidad €/kWh) y lanzaria ValueError
+                # si la fuente esta en unavailable/unknown. pause_or_resume_charging
+                # ya protege el parseo con try/except (ValueError, TypeError).
                 await pause_or_resume_charging(
-                    self.state, max_price, paused_switch, v2c_carga_pvpc_switch
+                    precio_luz_entity.state, max_price, paused_switch, v2c_carga_pvpc_switch
                 )
 
+                # available devuelve False cuando la fuente no es numerica, de
+                # modo que async_write_ha_state escribe el estado como no
+                # disponible sin exigir un valor numerico (degradacion con
+                # gracia en vez de propagar ValueError).
                 self.async_write_ha_state()
             else:
                 _LOGGER.debug("Hay entidades aun no creadas")
@@ -766,4 +806,12 @@ class PrecioLuzEntity(CoordinatorEntity, SensorEntity):
 
         await update_state(None)
 
-        async_track_time_interval(self.hass, update_state, timedelta(seconds=30))
+        # Registrar el listener periodico via async_on_remove para que HA lo
+        # cancele automaticamente al desmontar la entidad y no se acumulen
+        # timers duplicados en cada reload de la integracion (mismo patron que
+        # ChargeKmSensor.async_added_to_hass).
+        self.async_on_remove(
+            async_track_time_interval(
+                self.hass, update_state, timedelta(seconds=30)
+            )
+        )

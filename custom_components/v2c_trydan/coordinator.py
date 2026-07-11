@@ -133,9 +133,6 @@ class V2CtrydanDataUpdateCoordinator(DataUpdateCoordinator):
         except ClientError as err:
             _LOGGER.debug(f"HTTP client error to {self.ip_address}: {err}")
             raise
-        except json.JSONDecodeError as e:
-            _LOGGER.error(f"JSON parsing error from {self.ip_address}: {e}")
-            raise
         except Exception as e:
             _LOGGER.debug(f"Unexpected error fetching data from {self.ip_address}: {e}")
             raise
