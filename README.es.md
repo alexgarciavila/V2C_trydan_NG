@@ -2,7 +2,7 @@
 
 **Componente de cargador de coche V2C Trydan para Home Assistant**
 
-[![hacs_badge](https://img.shields.io/badge/HACS-Default-orange.svg)](https://github.com/hacs/integration)
+[![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz/docs/faq/custom_repositories/)
 [![GitHub release](https://img.shields.io/github/release/alexgarciavila/V2C_trydan_NG.svg)](https://GitHub.com//alexgarciavila/V2C_trydan_NG/releases/)
 [![en](https://img.shields.io/badge/lang-en-red.svg)](https://github.com/alexgarciavila/V2C_trydan_NG/blob/main/README.md)
 [![es](https://img.shields.io/badge/lang-es-yellow.svg)](https://github.com/alexgarciavila/V2C_trydan_NG/blob/main/README.es.md)
@@ -22,6 +22,8 @@ Para una configuración posterior, necesitarás conocer los datos de consumo el�
 Si quieres usar la función de control de carga basada en el precio, debes instalar las siguientes integraciones para lovelace, desde HACS:
 - [PVPC Hourly Pricing Card](https://github.com/danimart1991/pvpc-hourly-pricing-card) 
 - [multiple-entity-row](https://github.com/benct/lovelace-multiple-entity-row)
+
+> **¿Vienes del repositorio original `Rain1971/V2C_trydant`?** Esta integración no está en el catálogo "default" de HACS; siempre se ha instalado como repositorio custom, así que HACS no te llevará automáticamente al nuevo repositorio. Para seguir recibiendo actualizaciones, elimina el repositorio custom antiguo `Rain1971/V2C_trydant` de HACS, añade `alexgarciavila/V2C_trydan_NG` como nuevo repositorio custom, y reinstala la integración (tus entidades y configuración actuales no se ven afectadas, el `domain` sigue siendo `v2c_trydan`).
 
 # Instalación:
 
