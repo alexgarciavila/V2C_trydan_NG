@@ -4,6 +4,40 @@
 
 Todas las versiones de este proyecto y sus cambios notables se documentan en este archivo.
 
+## [4.0.4] - 2026-07-11
+
+Correcciones de severidad baja de la auditoría inicial del código. Todos los
+cambios son de robustez/limpieza interna; ningún nombre de entidad, servicio
+ni evento ha cambiado.
+
+### Corregido
+
+- Eliminado código muerto inalcanzable en `NumericalStatus.native_value` y tres
+  asignaciones no-op sobre atributos en `PrecioLuzEntity` (la property
+  `extra_state_attributes` ya reconstruye el diccionario expuesto a partir de
+  sus propios valores rastreados en cada acceso, así que esas escrituras se
+  descartaban al instante).
+- Añadido un guard `coordinator.data is None` en `ChargeKmSensor.native_value`
+  para evitar un `AttributeError` transitorio justo tras el arranque, antes de
+  que se complete el primer refresco del coordinator.
+- `config_flow.py` ahora usa `async_get_clientsession(hass)` en vez de crear y
+  cerrar su propia `ClientSession` en cada intento de conexión.
+- `coordinator.py` trata ahora cualquier respuesta HTTP distinta de 200 como
+  error explícito (antes, una respuesta 2xx/3xx no-200 devolvía `None` de
+  forma silenciosa).
+- `DynamicPowerModeSelect` (`select.py`) se migra a `CoordinatorEntity`,
+  eliminando su propio polling HTTP periódico a `/RealTimeData` (que
+  duplicaba la petición que el coordinator ya hace cada 5s); la escritura del
+  modo no cambia.
+- `services.yaml` documenta ahora los 7 servicios registrados (nombre,
+  descripción, campos, selectores), antes vacío y sin ningún selector en la
+  UI de Herramientas de desarrollo → Acciones.
+
+### No incluido en esta versión
+
+- Rango de `DynamicPowerMode` limitado a 0-5 en el selector en vez de 0-7
+  (cambio de contrato, seguido aparte, aún sin abordar).
+
 ## [4.0.3] - 2026-07-11
 
 Ronda de revisión y correcciones de robustez sobre el estado inicial del código tras
