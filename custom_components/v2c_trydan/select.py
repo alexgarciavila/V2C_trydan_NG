@@ -6,39 +6,31 @@ import logging
 import aiohttp
 import asyncio
 import json
-import re
 
 from . import DOMAIN
+from .json_repair import repair_v2c_json
 
 _LOGGER = logging.getLogger(__name__)
 
 def _parse_response_json(text: str, content_type: str = '') -> dict:
     """Parse JSON response, handling V2C firmware issues.
-    
+
     Handles:
     - Incorrect Content-Type (text instead of application/json)
-    - Duplicate FirmwareVersion fields
+    - Malformed JSON via the shared ``repair_v2c_json`` workarounds (duplicate
+      FirmwareVersion fields, unquoted version numbers, missing ReadyState comma),
+      so this path applies the same fixes as the coordinator.
     """
     # Log content-type issues for debugging
     if content_type and 'application/json' not in content_type.lower():
         _LOGGER.debug(f"Device returned non-JSON content-type: {content_type}, parsing as JSON anyway")
-    
+
     try:
         return json.loads(text)
     except json.JSONDecodeError:
         _LOGGER.debug("JSON parsing failed, attempting to fix malformed response")
-        
-        # Remove duplicate FirmwareVersion fields (keep the last one)
-        firmware_pattern = r'"FirmwareVersion":"[^"]*",'
-        matches = list(re.finditer(firmware_pattern, text))
-        if len(matches) > 1:
-            # Remove all but the last occurrence
-            for match in matches[:-1]:
-                text = text[:match.start()] + text[match.end():]
-        
-        # Try to parse again
         try:
-            return json.loads(text)
+            return repair_v2c_json(text)
         except json.JSONDecodeError as e:
             _LOGGER.error(f"Failed to parse malformed JSON: {e}")
             raise

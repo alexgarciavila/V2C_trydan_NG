@@ -24,7 +24,6 @@ class V2CtrydanConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self.ip_address = None
     
     @staticmethod
-    @config_entries.HANDLERS.register(DOMAIN)
     def async_get_options_flow(config_entry):
         """Create the options flow."""
         return V2CtrydanOptionsFlowHandler(config_entry)

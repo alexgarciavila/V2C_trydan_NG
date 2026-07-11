@@ -35,6 +35,7 @@ from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator,
     UpdateFailed,
 )
+from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN, CONF_KWH_PER_100KM, CONF_PRECIO_LUZ
 from .coordinator import V2CtrydanDataUpdateCoordinator
@@ -462,14 +463,6 @@ class ChargeKmSensor(CoordinatorEntity, SensorEntity):
                 #_LOGGER.debug("Charging unpaused")
                 self._charging_paused = False
 
-    async def handle_km_to_charge_state_change(self, event):
-        entity_id = event.data.get("entity_id")
-        
-        if entity_id == "number.v2c_km_to_charge":
-            old_state = event.data.get("old_state")
-            new_state = event.data.get("new_state")
-            #_LOGGER.debug(f"Entity {entity_id} changed from {old_state} to {new_state}")
-
     async def async_set_km_to_charge(self, value):
         await self.hass.services.async_call(
             "number",
@@ -479,9 +472,21 @@ class ChargeKmSensor(CoordinatorEntity, SensorEntity):
 
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
-        async_track_time_interval(self.hass, self.check_and_pause_charging, timedelta(seconds=10))
-        async_track_state_change_event(self.hass, ["switch.v2c_trydan_switch_paused"], self.handle_paused_state_change)
-        self.hass.bus.async_listen("state_changed", self.handle_km_to_charge_state_change)
+        # Registrar los listeners via async_on_remove para que HA los cancele
+        # automaticamente al desmontar la entidad y no se acumulen duplicados
+        # en cada reload de la integracion.
+        self.async_on_remove(
+            async_track_time_interval(
+                self.hass, self.check_and_pause_charging, timedelta(seconds=10)
+            )
+        )
+        self.async_on_remove(
+            async_track_state_change_event(
+                self.hass,
+                ["switch.v2c_trydan_switch_paused"],
+                self.handle_paused_state_change,
+            )
+        )
 
     async def check_and_pause_charging(self, now):
         paused_switch = self.hass.states.get("switch.v2c_trydan_switch_paused")
@@ -683,7 +688,7 @@ class PrecioLuzEntity(CoordinatorEntity, SensorEntity):
                 next_day_price_attr = f"price_next_day_{i:02d}h"
 
                 if price_attr in attributes and float(attributes[price_attr]) <= max_price:
-                    if i > current_hour:
+                    if i >= current_hour:
                         valid_hours.append(i)
                         total_hours += 1
 
@@ -695,7 +700,14 @@ class PrecioLuzEntity(CoordinatorEntity, SensorEntity):
     
         async def pause_or_resume_charging(current_state, max_price, paused_switch, v2c_carga_pvpc_switch):
             if v2c_carga_pvpc_switch.state == "on":
-                if float(current_state) <= max_price:
+                try:
+                    current_price = float(current_state)
+                except (ValueError, TypeError):
+                    _LOGGER.debug(
+                        f"Precio actual no parseable ({current_state}); se omite pausa/reanudacion de carga PVPC"
+                    )
+                    return
+                if current_price <= max_price:
                     await self.hass.services.async_call("switch", "turn_off", {"entity_id": paused_switch.entity_id})
                 else:
                     await self.hass.services.async_call("switch", "turn_on", {"entity_id": paused_switch.entity_id})
@@ -714,8 +726,14 @@ class PrecioLuzEntity(CoordinatorEntity, SensorEntity):
                 precio_luz_entity = None
 
             if all([precio_luz_entity, paused_switch, v2c_carga_pvpc_switch, max_price_entity]):
-                max_price = float(max_price_entity.state)
-                current_hour = datetime.now().hour
+                try:
+                    max_price = float(max_price_entity.state)
+                except (ValueError, TypeError):
+                    _LOGGER.debug(
+                        f"max_price no parseable ({max_price_entity.state}); se omite el ciclo de control de carga PVPC"
+                    )
+                    return
+                current_hour = dt_util.now().hour
 
                 self.valid_hours, self.valid_hours_next_day, self.total_hours = await extract_price_attrs(
                     precio_luz_entity, max_price, current_hour
