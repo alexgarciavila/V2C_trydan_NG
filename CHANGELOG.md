@@ -1,84 +1,88 @@
 # Changelog
 
-Todas las versiones de este proyecto y sus cambios notables se documentan en este archivo.
+*[Versión en español](CHANGELOG.es.md)*
+
+All notable changes to this project are documented in this file.
 
 ## [4.0.3] - 2026-07-11
 
-Ronda de revisión y correcciones de robustez sobre el estado inicial del código tras
-la reactivación del proyecto como V2C Trydan NG. Todos los cambios son correcciones
-de comportamiento; no se ha modificado ningún nombre de entidad, servicio ni evento.
+Review and robustness fixes over the initial state of the code after the
+project was resumed as V2C Trydan NG. All changes are behavior fixes; no
+entity, service, or event name has changed.
 
-### Corregido
+### Fixed
 
-- **Servicio `set_dynamic_power_mode` roto por recursión.** La función de módulo que
-  escribía `DynamicPowerMode` al dispositivo tenía el mismo nombre que el handler de
-  servicio, provocando que se llamase a sí misma en vez de hacer la petición HTTP real.
-  Renombrada a `async_write_dynamic_power_mode`.
-- **Manejo de errores insuficiente en los servicios.** Los 7 handlers de servicio
-  (`set_min_intensity`, `set_max_intensity`, `set_intensity`, `set_dynamic_power_mode`
-  y sus variantes slider) solo capturaban `ValueError`; un parámetro ausente o
-  inválido podía lanzar `KeyError`/`TypeError` sin controlar. Ahora se capturan y se
-  registra un error legible.
-- **Carga marcada como completa de forma espuria.** Si `number.v2c_km_to_charge`
-  quedaba en `unknown`/`unavailable` (por ejemplo justo tras un reinicio), el ciclo de
-  comprobación de carga completa lo interpretaba como "0 km restantes" y pausaba y
-  bloqueaba el cargador, además de disparar `v2c_trydan.charging_complete`, de forma
-  repetida cada 10 segundos.
-- **`sensor.v2c_precio_luz` quedaba `unavailable` tras reiniciar Home Assistant.** La
-  entidad no se creaba si el sensor PVPC de origen aún no había publicado su estado en
-  el instante del arranque. Ahora se crea siempre que está configurada, y el ciclo de
-  refresco periódico la actualiza en cuanto la entidad de origen está lista.
-- **Pérdida de valores tras reiniciar Home Assistant.** `number.v2c_max_price`,
-  `number.v2c_km_to_charge` y el switch `carga_pvpc` no conservaban su último valor
-  o estado tras un reinicio, volviendo siempre a los valores por defecto. Ahora usan
-  `RestoreEntity` para recordarlos.
-- **Umbral de fallos consecutivos no respetado en el coordinator.** El log de error
-  por problemas de conexión con el dispositivo salía en el primer fallo en vez de
-  esperar a 5 fallos consecutivos como indica la convención del proyecto; además, el
-  `except Exception` interno de cada intento individual de `tenacity` logueaba en
-  `ERROR` en vez de `DEBUG`, generando ruido en cada reintento. Ambos puntos corregidos
-  y validados contra hardware real (corte de red simulado con firewall).
-- **Reparación de JSON del firmware duplicada y divergente.** `coordinator.py` y
-  `select.py` tenían cada uno su propia lógica para reparar el JSON malformado que
-  devuelve el firmware, y no aplicaban exactamente los mismos apaños. Se extrajo a un
-  módulo compartido nuevo, `json_repair.py`, usado por ambos.
-- **Fuga de listeners en cada recarga de la integración.** `ChargeKmSensor` registraba
-  varios listeners (temporizador de 10s, cambio de estado del switch de pausa) sin
-  cancelarlos al desmontar la entidad, acumulándose en cada `reload`. Ahora se cancelan
-  automáticamente vía `async_on_remove`. Se eliminó además un listener global sobre
-  `state_changed` que no tenía ninguna lógica real (código muerto).
-- **Hora actual excluida del cálculo de horas válidas de PVPC.** El cálculo de
-  `ValidHours` comparaba con `i > current_hour` en vez de `i >= current_hour`,
-  dejando fuera la hora en curso aunque su precio cumpliera el máximo configurado.
-  Se corrige además el uso de hora local naive de Python por la hora de Home
-  Assistant (`dt_util.now()`), respetando la zona horaria configurada.
-- **Excepciones no controladas si el sensor PVPC o `MaxPrice` estaban
-  `unavailable`/`unknown`.** El ciclo de control de carga PVPC hacía `float()`
-  directamente sobre esos estados sin capturar errores de parseo, abortando el ciclo
-  completo (por ejemplo durante un mantenimiento nocturno del proveedor de datos
-  PVPC). Ahora se omite el ciclo de forma controlada con log en `debug`.
-- **Registro frágil del flujo de opciones en `config_flow.py`.** Se eliminó el
-  decorador `@config_entries.HANDLERS.register(DOMAIN)` sobre `async_get_options_flow`,
-  redundante con el registro que ya hace la clase vía `domain=DOMAIN`.
+- **`set_dynamic_power_mode` service broken by recursion.** The module-level
+  function that wrote `DynamicPowerMode` to the device had the same name as the
+  service handler, causing it to call itself instead of making the actual HTTP
+  request. Renamed to `async_write_dynamic_power_mode`.
+- **Insufficient error handling in services.** The 7 service handlers
+  (`set_min_intensity`, `set_max_intensity`, `set_intensity`,
+  `set_dynamic_power_mode`, and their slider variants) only caught
+  `ValueError`; a missing or invalid parameter could raise an uncaught
+  `KeyError`/`TypeError`. These are now caught and logged with a readable error.
+- **Charging spuriously marked as complete.** If `number.v2c_km_to_charge`
+  ended up in an `unknown`/`unavailable` state (for example right after a
+  restart), the charging-complete check cycle interpreted it as "0 km left" and
+  paused and locked the charger, also firing `v2c_trydan.charging_complete`,
+  repeatedly every 10 seconds.
+- **`sensor.v2c_precio_luz` stayed `unavailable` after restarting Home
+  Assistant.** The entity wasn't created if the source PVPC sensor hadn't
+  published its state yet at setup time. It is now always created when
+  configured, and the periodic refresh cycle updates it as soon as the source
+  entity is ready.
+- **Values lost after restarting Home Assistant.** `number.v2c_max_price`,
+  `number.v2c_km_to_charge`, and the `carga_pvpc` switch did not persist their
+  last value or state across a restart, always resetting to their defaults.
+  They now use `RestoreEntity` to remember them.
+- **Consecutive-failure threshold not respected in the coordinator.** The
+  connectivity error log fired on the very first failure instead of waiting
+  for 5 consecutive failures as the project convention requires; in addition,
+  the inner `except Exception` of each individual `tenacity` retry attempt
+  logged at `ERROR` instead of `DEBUG`, causing noise on every retry. Both
+  points fixed and validated against real hardware (network cut simulated via
+  firewall).
+- **Duplicated and divergent firmware JSON repair logic.** `coordinator.py`
+  and `select.py` each had their own logic to fix the malformed JSON returned
+  by the firmware, and did not apply exactly the same workarounds. Extracted
+  into a new shared module, `json_repair.py`, used by both.
+- **Listener leak on every integration reload.** `ChargeKmSensor` registered
+  several listeners (10s timer, pause switch state change) without cancelling
+  them when the entity was removed, accumulating on every `reload`. They are
+  now cancelled automatically via `async_on_remove`. A global `state_changed`
+  listener with no real logic (dead code) was also removed.
+- **Current hour excluded from the PVPC valid-hours calculation.** The
+  `ValidHours` calculation compared with `i > current_hour` instead of
+  `i >= current_hour`, leaving out the current hour even when its price met
+  the configured maximum. Also fixed the use of Python's naive local time in
+  favor of Home Assistant's time (`dt_util.now()`), respecting the configured
+  timezone.
+- **Uncaught exceptions if the PVPC sensor or `MaxPrice` were
+  `unavailable`/`unknown`.** The PVPC charge-control cycle called `float()`
+  directly on those states without catching parsing errors, aborting the
+  whole cycle (for example during a PVPC data provider's overnight
+  maintenance). The cycle is now skipped in a controlled way with a debug log.
+- **Fragile options flow registration in `config_flow.py`.** Removed the
+  `@config_entries.HANDLERS.register(DOMAIN)` decorator on
+  `async_get_options_flow`, redundant with the registration the class already
+  performs via `domain=DOMAIN`.
 
-### Documentación
+### Documentation
 
-- Corregido el contexto sobre disponibilidad de hardware de pruebas en `AGENTS.md`:
-  el proyecto original se archivó porque su mantenedor anterior se quedó sin máquina
-  de pruebas, no porque este fork carezca de acceso a un dispositivo real. El
-  mantenedor actual sí dispone de un V2C Trydan real, usado para validar todos los
-  cambios de esta versión.
+- Fixed the context about test hardware availability: the original project was
+  archived because its previous maintainer was left without a test device, not
+  because this fork lacks access to a real one. The current maintainer does
+  have a real V2C Trydan, used to validate every change in this release.
 
-### Pendiente (no incluido en esta versión)
+### Not included in this release
 
-- Rango de `DynamicPowerMode` limitado a 0-5 en el selector en vez de 0-7 (cambio de
-  contrato, se evaluará aparte).
-- Varios hallazgos de severidad baja (código muerto menor, `services.yaml` sin
-  selectores, `select.py` con polling propio fuera del patrón coordinator, entre
-  otros) quedan registrados como backlog para una futura ronda.
+- `DynamicPowerMode` range limited to 0-5 in the selector instead of 0-7
+  (contract change, to be evaluated separately).
+- Several low-severity findings (minor dead code, `services.yaml` without
+  selectors, `select.py` polling on its own outside the coordinator pattern,
+  among others) are tracked as backlog for a future round.
 
-## [4.0.2] y anteriores
+## [4.0.2] and earlier
 
-Sin changelog detallado previo a esta versión. Ver historial de commits del
-repositorio para el detalle de cambios anteriores a la reactivación del proyecto
-como V2C Trydan NG.
+No detailed changelog prior to this version. See the repository's commit
+history for changes before the project was resumed as V2C Trydan NG.
