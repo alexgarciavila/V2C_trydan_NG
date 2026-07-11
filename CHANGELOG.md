@@ -4,6 +4,40 @@
 
 All notable changes to this project are documented in this file.
 
+## [4.0.6] - 2026-07-12
+
+Fixes for 7 production bugs found while writing the test suite added in 4.0.5,
+previously documented as regression tests without being fixed. No contract
+change except an improvement to an existing error message in `config_flow.py`.
+
+### Fixed
+
+- `sensor.py` — `PrecioLuzEntity` no longer raises `ValueError` when the source
+  PVPC sensor is `unavailable`/`unknown` while `carga_pvpc` is on. Added an
+  `available` property that degrades gracefully, and `pause_or_resume_charging`
+  now receives the source's raw state instead of `self.state`, which already
+  validated and raised too early.
+- `sensor.py` — the 30s listener in `update_state` is now cancelled via
+  `async_on_remove`, avoiding a leak on every integration reload.
+- `sensor.py` — added a `coordinator.data is None` guard in
+  `NumericalStatus.native_value`.
+- `sensor.py` — `valid_hours`/`valid_hours_next_day` now start as an empty
+  list instead of a string, consistent with their type after the first refresh.
+- `config_flow.py` — `AbortFlow` is now re-raised before the generic
+  `except Exception`, so reconfiguring an already-registered IP aborts with
+  "already configured" instead of a generic error.
+- `__init__.py` — the 4 HTTP write functions now also catch
+  `asyncio.TimeoutError`.
+- `json_repair.py` — the comma insertion before `ReadyState` is now
+  conditional (regex-based) instead of unconditional, so it no longer
+  corrupts an already-valid JSON response that already has that comma.
+- `coordinator.py` — removed an unreachable outer
+  `except json.JSONDecodeError` in `_async_get_json` (optional cleanup, no
+  behavior change).
+
+Full test suite: 220 tests passing, 95% coverage. `DynamicPowerMode` range
+bug (#6) intentionally left untouched, tracked separately.
+
 ## [4.0.5] - 2026-07-11
 
 Development-only change: adds an automated test suite (pytest +
