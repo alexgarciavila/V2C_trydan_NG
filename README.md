@@ -2,7 +2,7 @@
 
 **Car charger V2C Trydan component for Home Assistant**
 
-[![hacs_badge](https://img.shields.io/badge/HACS-Default-orange.svg)](https://github.com/hacs/integration)
+[![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz/docs/faq/custom_repositories/)
 [![GitHub release](https://img.shields.io/github/release/alexgarciavila/V2C_trydan_NG.svg)](https://GitHub.com//alexgarciavila/V2C_trydan_NG/releases/)
 [![en](https://img.shields.io/badge/lang-en-red.svg)](https://github.com/alexgarciavila/V2C_trydan_NG/blob/main/README.md)
 [![es](https://img.shields.io/badge/lang-es-yellow.svg)](https://github.com/alexgarciavila/V2C_trydan_NG/blob/main/README.es.md)
@@ -23,7 +23,7 @@ If you want to use the price-based load control feature, you must install the fo
 - [PVPC Hourly Pricing Card](https://github.com/danimart1991/pvpc-hourly-pricing-card) 
 - [multiple-entity-row](https://github.com/benct/lovelace-multiple-entity-row)
 
-
+> **Coming from the original `Rain1971/V2C_trydant` repository?** This integration is not listed in the HACS default store; it has always been installed as a custom repository, so HACS does not follow it automatically to the new repository. To keep receiving updates, remove the old `Rain1971/V2C_trydant` custom repository from HACS, add `alexgarciavila/V2C_trydan_NG` as a new custom repository, and reinstall the integration (your existing entities and configuration are not affected, as the `domain` stays `v2c_trydan`).
 
 # Setup:
 
