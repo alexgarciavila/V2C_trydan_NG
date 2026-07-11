@@ -4,6 +4,43 @@
 
 Todas las versiones de este proyecto y sus cambios notables se documentan en este archivo.
 
+## [4.0.6] - 2026-07-12
+
+Corrige 7 bugs de producción encontrados al escribir la suite de tests
+añadida en la 4.0.5, antes documentados como tests de regresión sin corregir.
+Sin cambio de contrato salvo una mejora de un mensaje de error existente en
+`config_flow.py`.
+
+### Corregido
+
+- `sensor.py` — `PrecioLuzEntity` ya no lanza `ValueError` cuando el sensor
+  PVPC de origen está `unavailable`/`unknown` con `carga_pvpc` activo. Se
+  añade una property `available` que degrada con gracia, y
+  `pause_or_resume_charging` recibe ahora el estado crudo de la fuente en vez
+  de `self.state`, que ya validaba y lanzaba demasiado pronto.
+- `sensor.py` — el listener de 30s de `update_state` se cancela ahora vía
+  `async_on_remove`, evitando una fuga en cada recarga de la integración.
+- `sensor.py` — añadido un guard `coordinator.data is None` en
+  `NumericalStatus.native_value`.
+- `sensor.py` — `valid_hours`/`valid_hours_next_day` empiezan ahora como
+  lista vacía en vez de string, consistente con su tipo tras el primer
+  refresco.
+- `config_flow.py` — `AbortFlow` se re-lanza ahora antes del
+  `except Exception` genérico, así que reconfigurar una IP ya registrada
+  aborta con "ya configurado" en vez de un error genérico.
+- `__init__.py` — las 4 funciones de escritura HTTP capturan ahora también
+  `asyncio.TimeoutError`.
+- `json_repair.py` — la inserción de coma ante `ReadyState` pasa de
+  incondicional a condicional (basada en regex), sin corromper ya una
+  respuesta JSON válida que ya tuviera esa coma.
+- `coordinator.py` — eliminado un `except json.JSONDecodeError` externo
+  inalcanzable en `_async_get_json` (limpieza opcional, sin cambio de
+  comportamiento).
+
+Suite de tests completa: 220 tests en verde, 95% de cobertura. El bug del
+rango de `DynamicPowerMode` (#6) queda intencionadamente sin tocar, seguido
+aparte.
+
 ## [4.0.5] - 2026-07-11
 
 Cambio de solo desarrollo: añade una suite de tests automatizados (pytest +
