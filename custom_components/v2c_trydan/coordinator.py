@@ -121,5 +121,5 @@ class V2CtrydanDataUpdateCoordinator(DataUpdateCoordinator):
             _LOGGER.error(f"JSON parsing error from {self.ip_address}: {e}")
             raise
         except Exception as e:
-            _LOGGER.error(f"Unexpected error fetching data from {self.ip_address}: {e}")
+            _LOGGER.debug(f"Unexpected error fetching data from {self.ip_address}: {e}")
             raise
