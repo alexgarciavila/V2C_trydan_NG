@@ -4,6 +4,26 @@
 
 Todas las versiones de este proyecto y sus cambios notables se documentan en este archivo.
 
+## [4.0.5] - 2026-07-11
+
+Cambio de solo desarrollo: añade una suite de tests automatizados (pytest +
+pytest-homeassistant-custom-component) que cubre `custom_components/v2c_trydan/`,
+con 217 tests y un 95% de cobertura. **No se ha modificado ningún archivo
+dentro de `custom_components/v2c_trydan/`**, así que este release no tiene
+efecto funcional para el usuario final — la versión se sube solo para dejar
+constancia exacta en el historial de releases.
+
+Al escribir los tests se detectaron varios bugs de producción que quedan
+intencionadamente sin corregir en este release, documentados como tests de
+regresión: `ValueError` no controlado en `PrecioLuzEntity.update_state`
+cuando el sensor PVPC de origen está `unavailable`/`unknown` con
+`carga_pvpc` activo; `AbortFlow` engullido por el manejador de excepción
+genérico de `async_step_user` en `config_flow.py` al reconfigurar una IP ya
+registrada; un listener de 30s en `PrecioLuzEntity` sin envolver en
+`async_on_remove`; `asyncio.TimeoutError` no capturado en las funciones de
+escritura HTTP de `__init__.py`; y la fragilidad ya conocida de
+`repair_v2c_json` ante `ReadyState`.
+
 ## [4.0.4] - 2026-07-11
 
 Correcciones de severidad baja de la auditoría inicial del código. Todos los

@@ -4,6 +4,24 @@
 
 All notable changes to this project are documented in this file.
 
+## [4.0.5] - 2026-07-11
+
+Development-only change: adds an automated test suite (pytest +
+pytest-homeassistant-custom-component) covering `custom_components/v2c_trydan/`,
+with 217 tests and 95% coverage. **No file inside `custom_components/v2c_trydan/`
+was changed**, so this release has no functional effect for end users — the
+version is bumped only to keep the release history accurate.
+
+Several production bugs were found while writing tests and are intentionally
+left unfixed in this release, documented as regression tests instead:
+`ValueError` left uncaught in `PrecioLuzEntity.update_state` when the source
+PVPC sensor is `unavailable`/`unknown` while `carga_pvpc` is on; `AbortFlow`
+swallowed by the generic exception handler in `config_flow.py`'s
+`async_step_user` when reconfiguring an already-registered IP; a 30s listener
+in `PrecioLuzEntity` not wrapped in `async_on_remove`; `asyncio.TimeoutError`
+not caught in the HTTP write functions in `__init__.py`; and the already-known
+fragility of `repair_v2c_json` around `ReadyState`.
+
 ## [4.0.4] - 2026-07-11
 
 Low-severity fixes from the initial code audit. All changes are internal
