@@ -4,6 +4,7 @@ from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.const import CONF_IP_ADDRESS, Platform
 from homeassistant.helpers import device_registry as dr, config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+import asyncio
 import logging
 import aiohttp
 
@@ -197,7 +198,7 @@ async def async_set_min_intensity(hass: HomeAssistant, ip_address: str, min_inte
         async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as response:
             response.raise_for_status()
             _LOGGER.debug(f"Min intensity set to {min_intensity} at {ip_address}")
-    except aiohttp.ClientError as err:
+    except (aiohttp.ClientError, asyncio.TimeoutError) as err:
         _LOGGER.error(f"Error setting min intensity: {err}")
 
 async def async_set_max_intensity(hass: HomeAssistant, ip_address: str, max_intensity: int):
@@ -208,7 +209,7 @@ async def async_set_max_intensity(hass: HomeAssistant, ip_address: str, max_inte
         async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as response:
             response.raise_for_status()
             _LOGGER.debug(f"Max intensity set to {max_intensity} at {ip_address}")
-    except aiohttp.ClientError as err:
+    except (aiohttp.ClientError, asyncio.TimeoutError) as err:
         _LOGGER.error(f"Error setting max intensity: {err}")
 
 async def async_write_dynamic_power_mode(hass: HomeAssistant, ip_address: str, dynamic_power_mode: int):
@@ -219,7 +220,7 @@ async def async_write_dynamic_power_mode(hass: HomeAssistant, ip_address: str, d
         async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as response:
             response.raise_for_status()
             _LOGGER.debug(f"Dynamic power mode set to {dynamic_power_mode} at {ip_address}")
-    except aiohttp.ClientError as err:
+    except (aiohttp.ClientError, asyncio.TimeoutError) as err:
         _LOGGER.error(f"Error setting dynamic power mode: {err}")
 
 async def async_set_intensity(hass: HomeAssistant, ip_address: str, intensity: int):
@@ -230,5 +231,5 @@ async def async_set_intensity(hass: HomeAssistant, ip_address: str, intensity: i
         async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as response:
             response.raise_for_status()
             _LOGGER.debug(f"Intensity set to {intensity} at {ip_address}")
-    except aiohttp.ClientError as err:
+    except (aiohttp.ClientError, asyncio.TimeoutError) as err:
         _LOGGER.error(f"Error setting intensity: {err}")

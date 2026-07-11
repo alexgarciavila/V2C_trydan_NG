@@ -18,13 +18,13 @@ Notas de diseno importantes (leer antes de tocar este fichero):
   ``sensor.py`` para solucionarlo (fuera del rol de test-agent).
 - En esa misma clase, la programacion periodica
   ``async_track_time_interval(self.hass, update_state, timedelta(seconds=30))``
-  se hace SIN envolver en ``self.async_on_remove(...)`` (a diferencia de
-  ``ChargeKmSensor``, que si lo hace correctamente). Es un listener que no se
-  cancela nunca al desmontar la entidad. Para no dejar timers colgando entre
-  tests (con logs de "lingering timer" de pytest-homeassistant-custom-component)
-  se parchea ``async_track_time_interval`` a un no-op en los tests de
-  ``PrecioLuzEntity``; esto no afecta la logica bajo prueba, que se ejecuta en
-  la llamada directa ``await update_state(None)`` dentro de
+  ya se envuelve en ``self.async_on_remove(...)`` (igual que ``ChargeKmSensor``),
+  de modo que HA cancela el listener al desmontar la entidad. Aun asi, para no
+  programar el timer real de 30s ni dejar timers colgando entre tests (logs de
+  "lingering timer" de pytest-homeassistant-custom-component) se parchea
+  ``async_track_time_interval`` a un no-op que devuelve un callback vacio en los
+  tests de ``PrecioLuzEntity``; esto no afecta la logica bajo prueba, que se
+  ejecuta en la llamada directa ``await update_state(None)`` dentro de
   ``async_added_to_hass``.
 """
 from __future__ import annotations
@@ -250,22 +250,17 @@ def test_numerical_status_defaults_to_string_zero_when_charge_state_key_missing(
     assert sensor.native_value == "0"
 
 
-def test_numerical_status_raises_when_coordinator_data_is_none(mock_coordinator):
-    """HALLAZGO (no corregido aqui): a diferencia de ChargeKmSensor/V2CtrydanSensor,
-    ``NumericalStatus.native_value`` no comprueba ``coordinator.data is None``
-    antes de llamar a ``.get(...)``. Si el coordinator aun no tiene datos
-    (p.ej. justo tras el arranque, antes del primer refresh), esta propiedad
-    lanza ``AttributeError`` en lugar de devolver un valor por defecto como
-    hacen el resto de sensores del modulo. Este test documenta el
-    comportamiento ACTUAL para detectarlo como regresion si cambia, y sirve
-    de evidencia para que dev-agent/bugfix-agent decidan si conviene
-    homogeneizar el guard.
+def test_numerical_status_returns_none_when_coordinator_data_is_none(mock_coordinator):
+    """Guard homogeneo con ChargeKmSensor/V2CtrydanSensor: si el coordinator aun
+    no tiene datos (p.ej. justo tras el arranque, antes del primer refresh),
+    ``NumericalStatus.native_value`` devuelve ``None`` en vez de lanzar
+    ``AttributeError`` al llamar a ``.get(...)`` sobre ``None``. Se devuelve
+    ``None`` (y no ``"0"``) porque "0" no es un estado real del dispositivo.
     """
     mock_coordinator.data = None
     sensor = NumericalStatus(mock_coordinator, FAKE_IP_ADDRESS)
 
-    with pytest.raises(AttributeError):
-        _ = sensor.native_value
+    assert sensor.native_value is None
 
 
 # ---------------------------------------------------------------------------
@@ -445,17 +440,19 @@ def precio_luz_config_entry() -> MockConfigEntry:
 def _no_op_periodic_tracker(monkeypatch):
     """Evita programar el `async_track_time_interval` real de 30s de PrecioLuzEntity.
 
-    Ver nota de cabecera del fichero: ese listener no se cancela via
-    `async_on_remove` en el codigo de produccion (hallazgo, no corregido
-    aqui), asi que lo neutralizamos en los tests para no dejar timers
-    colgando entre tests. La logica bajo prueba (`update_state`,
-    `extract_price_attrs`, `pause_or_resume_charging`) se ejecuta de forma
-    sincrona una vez dentro de `async_added_to_hass`, antes de programar el
-    intervalo, asi que este parche no oculta ningun comportamiento probado.
+    El listener periodico ya se registra via `self.async_on_remove(...)` en el
+    codigo de produccion (mismo patron que `ChargeKmSensor`), asi que se
+    devuelve un callback de remocion vacio (callable) para que
+    `async_on_remove` reciba algo valido que almacenar. Se neutraliza el timer
+    real para no dejar timers colgando entre tests. La logica bajo prueba
+    (`update_state`, `extract_price_attrs`, `pause_or_resume_charging`) se
+    ejecuta de forma sincrona una vez dentro de `async_added_to_hass`, antes de
+    programar el intervalo, asi que este parche no oculta ningun comportamiento
+    probado.
     """
     monkeypatch.setattr(
         "custom_components.v2c_trydan.sensor.async_track_time_interval",
-        lambda *args, **kwargs: None,
+        lambda *args, **kwargs: (lambda: None),
     )
 
 
@@ -557,24 +554,21 @@ async def test_pause_or_resume_charging_noop_when_carga_pvpc_switch_is_off(
 async def test_pause_or_resume_charging_skips_when_current_price_unavailable(
     hass: HomeAssistant, mock_coordinator, precio_luz_config_entry
 ):
-    """Precio PVPC en estado `unavailable`: `pause_or_resume_charging` en si
-    misma no rompe (el ``try/except (ValueError, TypeError)`` alrededor de
-    ``float(current_state)`` la hace volver sin tocar el switch de pausa).
+    """Precio PVPC en estado `unavailable`: la entidad degrada con gracia.
 
-    HALLAZGO (no corregido aqui, fuera del rol de test-agent): el ciclo
-    completo (``update_state``) SI revienta con ``ValueError`` mas adelante,
-    en ``self.async_write_ha_state()``. ``PrecioLuzEntity`` no sobrescribe
-    ``available`` ni ``device_class``, y hereda ``state_class="measurement"``
-    y una unidad (``€/kWh``) del sensor PVPC de origen; el helper interno de
-    ``SensorEntity`` de Home Assistant exige entonces un valor NUMERICO para
-    el estado, y "unavailable" (como STRING literal, no como estado especial
-    reconocido via ``available=False``) no lo es. En produccion esto se
-    traduciria en una excepcion no controlada cada vez que el sensor PVPC de
-    origen pase a ``unavailable``/``unknown`` mientras `v2c_carga_pvpc` sigue
-    activo, en lugar de degradar con gracia a un estado "no disponible".
-    Se documenta el comportamiento ACTUAL (la excepcion) para detectar
-    cualquier cambio como regresion, y como evidencia para dev-agent/
-    bugfix-agent.
+    ``pause_or_resume_charging`` en si misma no rompe (el
+    ``try/except (ValueError, TypeError)`` alrededor de ``float(current_state)``
+    la hace volver sin tocar el switch de pausa).
+
+    Tras el fix de ``PrecioLuzEntity`` (property ``available``), el ciclo
+    completo (``update_state`` -> ``self.async_write_ha_state()``) ya NO revienta
+    con ``ValueError``: la entidad hereda ``state_class="measurement"`` y una
+    unidad (``€/kWh``) del sensor PVPC de origen, pero cuando la fuente esta en
+    ``unavailable``/``unknown`` (valor no numerico) ``available`` devuelve
+    ``False`` y Home Assistant escribe el estado como no disponible sin exigir
+    un valor numerico. Antes esto propagaba una excepcion no controlada cada
+    vez que el sensor PVPC pasaba a ``unavailable``/``unknown`` mientras
+    `v2c_carga_pvpc` seguia activo; ahora degrada a "no disponible".
     """
     _setup_precio_luz_collaborators(
         hass, carga_pvpc_state="on", max_price_state="0.20", pvpc_state="unavailable"
@@ -586,13 +580,16 @@ async def test_pause_or_resume_charging_skips_when_current_price_unavailable(
     entity.hass = hass
     entity.entity_id = "sensor.v2c_precio_luz_test"
 
-    with pytest.raises(ValueError, match="unavailable"):
-        await entity.async_added_to_hass()
+    # No debe propagarse ninguna excepcion al pasar la fuente a unavailable.
+    await entity.async_added_to_hass()
     await hass.async_block_till_done()
 
+    # La entidad queda no disponible (fuente PVPC no numerica), en vez de
+    # reventar en async_write_ha_state.
+    assert entity.available is False
+
     # pause_or_resume_charging por si sola no actua sobre el switch de pausa
-    # (precio no parseable), independientemente de la excepcion posterior de
-    # async_write_ha_state.
+    # (precio no parseable).
     assert turn_off_calls == []
     assert turn_on_calls == []
 
@@ -617,13 +614,51 @@ async def test_update_state_skips_full_cycle_when_max_price_unavailable(
     assert turn_off_calls == []
     assert turn_on_calls == []
     # El ciclo se descarto antes de reasignar la fuente PVPC: sigue en el
-    # estado inicial (None -> native_value None) y `valid_hours` conserva el
-    # string por defecto fijado en __init__ (no se ha reasignado a la lista
-    # que devuelve extract_price_attrs).
+    # estado inicial (None -> native_value None) y `valid_hours` conserva la
+    # lista vacia por defecto fijada en __init__ (no se ha reasignado a la
+    # lista que devuelve extract_price_attrs).
     assert entity.native_value is None
-    assert entity.valid_hours == (
-        "0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23"
+    assert entity.valid_hours == []
+
+
+async def test_periodic_listener_registered_via_async_on_remove(
+    hass: HomeAssistant, mock_coordinator, precio_luz_config_entry, monkeypatch
+):
+    """P2-A: el `async_track_time_interval` de 30s se registra via
+    `self.async_on_remove(...)`, de modo que HA cancela el listener al
+    desmontar la entidad y no se acumulan timers duplicados en cada reload.
+    """
+    _setup_precio_luz_collaborators(hass, carga_pvpc_state="off")
+
+    def sentinel_cancel() -> None:
+        return None
+
+    monkeypatch.setattr(
+        "custom_components.v2c_trydan.sensor.async_track_time_interval",
+        lambda *args, **kwargs: sentinel_cancel,
     )
+
+    entity = PrecioLuzEntity(
+        mock_coordinator, None, FAKE_IP_ADDRESS, precio_luz_config_entry
+    )
+    entity.hass = hass
+    entity.entity_id = "sensor.v2c_precio_luz_test"
+
+    registered = []
+    original_on_remove = entity.async_on_remove
+
+    def _spy(func):
+        registered.append(func)
+        return original_on_remove(func)
+
+    monkeypatch.setattr(entity, "async_on_remove", _spy)
+
+    await entity.async_added_to_hass()
+    await hass.async_block_till_done()
+
+    # El callback de cancelacion del timer periodico quedo registrado para
+    # limpieza automatica al desmontar la entidad.
+    assert sentinel_cancel in registered
 
 
 async def test_extract_price_attrs_includes_current_hour_and_excludes_past_hour(

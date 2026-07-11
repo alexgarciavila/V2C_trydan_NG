@@ -18,7 +18,8 @@ def repair_v2c_json(json_str: str) -> dict:
     Applies the known firmware-specific workarounds, in order:
     - Removes duplicate ``FirmwareVersion`` fields (keeps the last one).
     - Quotes unquoted version numbers (e.g. ``1.6.13``).
-    - Inserts the missing comma before ``ReadyState``.
+    - Inserts the missing comma before ``ReadyState`` only when no separator is
+      already present (so it never corrupts already-valid JSON).
 
     Returns the parsed dict. Raises ``json.JSONDecodeError`` if the string
     still cannot be parsed after applying the workarounds, so callers can wrap
@@ -34,6 +35,19 @@ def repair_v2c_json(json_str: str) -> dict:
 
     # Fix version numbers without quotes
     cadena = json_str.replace("1.6.13", "\"1.6.13\"")
-    json_str_arreglado = cadena.replace("\"ReadyState\":", ",\"ReadyState\":")
+
+    # Insert the missing comma before "ReadyState" ONLY when a separator is
+    # actually absent. The real firmware concatenates the field with no
+    # separator (e.g. `...50"ReadyState":...`), so the char right before the
+    # field is the last char of the previous value. We must NOT add a comma
+    # when a valid separator already precedes the field -- a comma (possibly
+    # followed by whitespace, as json.dumps emits) or an opening brace at the
+    # start of the object -- otherwise a valid JSON would be corrupted into
+    # `...,,"ReadyState"...` and json.loads would raise.
+    json_str_arreglado = re.sub(
+        r'([^\s,{])(\s*)"ReadyState":',
+        r'\1\2,"ReadyState":',
+        cadena,
+    )
 
     return json.loads(json_str_arreglado)

@@ -12,15 +12,7 @@ from custom_components.v2c_trydan.json_repair import repair_v2c_json
 
 
 def test_repair_v2c_json_parses_valid_json_unchanged():
-    """Un JSON ya valido (sin el campo ReadyState) se parsea tal cual.
-
-    Nota: se evita deliberadamente incluir ``ReadyState`` en este caso de
-    valido "de verdad" porque revela una fragilidad conocida de
-    ``repair_v2c_json`` — ver
-    ``test_repair_v2c_json_corrupts_already_valid_ready_state_field`` mas
-    abajo, reportada como hallazgo y no corregida aqui (test-agent no
-    modifica codigo productivo).
-    """
+    """Un JSON ya valido se parsea tal cual."""
     valid_json = json.dumps({"ChargePower": 100, "Intensity": 16})
 
     result = repair_v2c_json(valid_json)
@@ -28,27 +20,44 @@ def test_repair_v2c_json_parses_valid_json_unchanged():
     assert result == {"ChargePower": 100, "Intensity": 16}
 
 
-def test_repair_v2c_json_corrupts_already_valid_ready_state_field():
-    """HALLAZGO (fragilidad, no corregida por test-agent): ``repair_v2c_json``
-    inserta una coma antes de ``"ReadyState":`` de forma INCONDICIONAL,
-    incluso si el JSON de entrada ya es valido y ya tiene la coma correcta.
-    Esto rompe un JSON perfectamente valido que contenga ``ReadyState``
-    despues de otro campo con coma.
+def test_repair_v2c_json_preserves_already_valid_ready_state_field():
+    """REGRESION (bug P3-A corregido): un JSON YA VALIDO que contiene
+    ``ReadyState`` tras otro campo con su coma correcta NO debe corromperse.
 
-    En el flujo real (``coordinator.arreglar_json_invalido``) esto no se
-    dispara porque ``repair_v2c_json`` solo se invoca tras un
-    ``json.JSONDecodeError`` del parseo inicial; pero la funcion es publica
-    y no es idempotente/segura para JSON ya valido, lo cual es fragil de
-    cara a llamadas futuras o cambios de firmware. Este test documenta el
-    comportamiento ACTUAL (no el deseado) para detectar cualquier cambio de
-    comportamiento como regresion, y sirve de evidencia para que
-    dev-agent/bugfix-agent decidan si conviene hacer la insercion de coma
-    condicional (solo si no hay ya una coma antes de ``"ReadyState":``).
+    Antes del fix, ``repair_v2c_json`` insertaba una coma antes de
+    ``"ReadyState":`` de forma INCONDICIONAL (``str.replace``), duplicando la
+    coma existente (``...,,"ReadyState"...``) y provocando un
+    ``json.JSONDecodeError`` sobre un JSON que originalmente era valido.
+
+    La insercion de coma ahora es condicional: solo se aplica cuando el campo
+    no tiene separador previo (el patron real del firmware), preservando el
+    JSON valido. ``json.dumps`` emite un espacio tras la coma, por lo que este
+    caso tambien cubre que la deteccion ignora el whitespace intermedio.
     """
     already_valid = json.dumps({"ChargePower": 100, "ReadyState": 3})
 
-    with pytest.raises(json.JSONDecodeError):
-        repair_v2c_json(already_valid)
+    result = repair_v2c_json(already_valid)
+
+    assert result == {"ChargePower": 100, "ReadyState": 3}
+
+
+def test_repair_v2c_json_preserves_valid_compact_ready_state_field():
+    """Variante compacta sin espacio tras la coma: tampoco debe corromperse."""
+    already_valid = '{"ChargePower":100,"ReadyState":3}'
+
+    result = repair_v2c_json(already_valid)
+
+    assert result == {"ChargePower": 100, "ReadyState": 3}
+
+
+def test_repair_v2c_json_preserves_ready_state_at_object_start():
+    """``ReadyState`` como primer campo (precedido de ``{``) es valido sin
+    coma y no debe recibir una coma espuria."""
+    already_valid = '{"ReadyState":3,"ChargePower":100}'
+
+    result = repair_v2c_json(already_valid)
+
+    assert result == {"ReadyState": 3, "ChargePower": 100}
 
 
 def test_repair_v2c_json_removes_duplicate_firmware_version():
