@@ -208,13 +208,25 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
         sensors.append(ChargeKmSensor(coordinator, ip_address, kwh_per_100km))
         sensors.append(NumericalStatus(coordinator, ip_address))
 
-        # Add PVPC price sensor if configured
+        # Add PVPC price sensor if configured.
+        # No dependemos de que el estado de la entidad de origen ya este
+        # publicado en este instante: durante el arranque de Home Assistant la
+        # entidad PVPC puede no existir todavia y hass.states.get() devolveria
+        # None, dejando este sensor sin crear hasta un reload manual. Creamos
+        # siempre la entidad si la opcion esta configurada; el ciclo de refresco
+        # periodico (async_added_to_hass -> update_state) la pone al dia en
+        # cuanto la entidad de origen esta disponible.
         precio_luz_entity_id = config_entry.options.get(CONF_PRECIO_LUZ)
         if precio_luz_entity_id:
             precio_luz_entity = hass.states.get(precio_luz_entity_id)
-            if precio_luz_entity:
-                sensors.append(PrecioLuzEntity(coordinator, precio_luz_entity, ip_address, config_entry))
-                _LOGGER.debug("PrecioLuzEntity added to sensors list")
+            if precio_luz_entity is None:
+                _LOGGER.debug(
+                    "Estado de %s aun no disponible en el arranque; se crea "
+                    "PrecioLuzEntity y se actualizara al estar lista la fuente",
+                    precio_luz_entity_id,
+                )
+            sensors.append(PrecioLuzEntity(coordinator, precio_luz_entity, ip_address, config_entry))
+            _LOGGER.debug("PrecioLuzEntity added to sensors list")
     else:
         _LOGGER.warning("No coordinator data available, sensors will not be created")
 
@@ -709,6 +721,12 @@ class PrecioLuzEntity(CoordinatorEntity, SensorEntity):
                     precio_luz_entity, max_price, current_hour
                 )
 
+                # Asignar la entidad de origen ANTES de acceder a
+                # extra_state_attributes: si la entidad se creo con estado None
+                # en el arranque, la propiedad devolveria None hasta esta
+                # reasignacion y las escrituras siguientes lanzarian TypeError.
+                self.v2c_precio_luz_entity = precio_luz_entity
+
                 self.extra_state_attributes["ValidHours"] = self.valid_hours
                 self.extra_state_attributes["ValidHoursNextDay"] = self.valid_hours_next_day
                 self.extra_state_attributes["TotalHours"] = self.total_hours
@@ -716,8 +734,6 @@ class PrecioLuzEntity(CoordinatorEntity, SensorEntity):
                 await pause_or_resume_charging(
                     self.state, max_price, paused_switch, v2c_carga_pvpc_switch
                 )
-
-                self.v2c_precio_luz_entity = precio_luz_entity
 
                 self.async_write_ha_state()
             else:

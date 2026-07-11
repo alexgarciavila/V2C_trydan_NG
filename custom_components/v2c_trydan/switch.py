@@ -7,6 +7,7 @@ from homeassistant.const import CONF_IP_ADDRESS
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .coordinator import V2CtrydanDataUpdateCoordinator
@@ -132,7 +133,7 @@ class V2CtrydanSwitch(CoordinatorEntity, SwitchEntity):
             _LOGGER.error(f"Error turning off switch {self._data_key}: {e}")
             raise
 
-class V2CCargaPVPCSwitch(SwitchEntity):
+class V2CCargaPVPCSwitch(RestoreEntity, SwitchEntity):
     def __init__(self, precio_luz_entity, ip_address):
         self._is_on = False
         self.precio_luz_entity = precio_luz_entity
@@ -194,7 +195,12 @@ class V2CCargaPVPCSwitch(SwitchEntity):
     async def async_added_to_hass(self):
         """Called when entity is added to hass."""
         await super().async_added_to_hass()
-        
+
+        # Restore the last known on/off state after a Home Assistant restart
+        last_state = await self.async_get_last_state()
+        if last_state is not None:
+            self._is_on = last_state.state == "on"
+
         # Check if PVPC entity is available after being added to hass
         if self.precio_luz_entity is None:
             self.precio_luz_entity = self.hass.states.get(self._precio_luz_entity_id)
